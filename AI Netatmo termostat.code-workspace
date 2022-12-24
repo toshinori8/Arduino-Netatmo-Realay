@@ -1,0 +1,44 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../../../../Users/tosh/Documents/Arduino/AI Netatmo termostat"
+		},
+		{
+			"name": "Arduino AI Netatmo",
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"__bit_reference": "cpp",
+			"__hash_table": "cpp",
+			"__split_buffer": "cpp",
+			"__tree": "cpp",
+			"array": "cpp",
+			"deque": "cpp",
+			"initializer_list": "cpp",
+			"list": "cpp",
+			"map": "cpp",
+			"set": "cpp",
+			"span": "cpp",
+			"string": "cpp",
+			"string_view": "cpp",
+			"unordered_map": "cpp",
+			"vector": "cpp",
+			"ranges": "cpp",
+			"__config": "cpp",
+			"iterator": "cpp",
+			"locale": "cpp",
+			"ostream": "cpp",
+			"*.tcc": "cpp",
+			"algorithm": "cpp",
+			"memory": "cpp",
+			"random": "cpp",
+			"iosfwd": "cpp",
+			"istream": "cpp",
+			"numeric": "cpp",
+			"sstream": "cpp",
+			"streambuf": "cpp"
+		}
+	}
+}
