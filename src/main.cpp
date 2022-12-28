@@ -139,12 +139,7 @@ void setup() {
   server.on("/config", []{ iotWebConf.handleConfig(); });
   
   server.onNotFound([](){ iotWebConf.handleNotFound(); });
-
   Serial.println("Ready.");
-
-
-
-
 
   // uruchomienie serwera HTTP
   server.begin();
@@ -155,13 +150,11 @@ void setup() {
   webSocket.onEvent(onWsEvent);
   Serial.println("WebSocket server started");
 
-
  //  ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
  initInputExpander();
  initOutputExpander();
 
-
-
+// INICJALIZACJA PCF 
 Serial.print("Init input Expander...");
 if (ExInput.begin( )) {
 Serial.println("OK");
@@ -171,16 +164,12 @@ Serial.println("error");
 
 initInputExpander();
 
-
 Serial.print("Init output Expander...");
 if (ExOutput.begin()) {
 Serial.println("OK");
 } else {
 Serial.println("error");
 }
-
-
-
 
 blinkOutput(20);
 
@@ -204,61 +193,88 @@ void loop() {
   doc["pin_4"]="OFF";
   doc["pin_5"]="OFF";
   doc["pin_6"]="OFF";
-
-  delay(800);
+  bool anyInputON = false; 
+  
   iotWebConf.doLoop();
 
+  delay(800);
   //timers.process();
   
-  bool anyInputON = false; 
-   // sprawdzenie stanu 6 wejść na pierwszym ekspanderze
+  // sprawdzenie stanu 6 wejść na pierwszym ekspanderze
   for (int i = 0; i < 6; i++) {
-        if (String(ExInput.digitalRead(i)) == "1") {
-          anyInputON = true; // znaleziono zwarte wejście
-          Serial.print('znaleziono zwarcie wejście '+  i);
-        }
-
-  }
-
-
-        if(anyInputON == true){
-
-                  // Załączenie pompy, pieca i LED 
-                  ExOutput.digitalWrite(P6, LOW); // pin 7 (piec, pompa) 
-                  doc["piec_pompa"] = "ON";
-                  ExOutput.digitalWrite(P7, LOW); // pin 8 (LED INDICATOR)
-                  doc["led"] = "ON";
-            
-            for (int i = 0; i < 6; i++) {
-            if (String(ExInput.digitalRead(i)) == "1") {
-                  ExOutput.digitalWrite(i, HIGH);
-                  doc["pin_" + String(i)] = "ON"; 
-            }else{
-                  doc["pin_" + String(i)] = "OFF";
-                  ExOutput.digitalWrite(i, LOW);          
-            }
-           
-               
-
-            }
-   
-        } 
-
-        if(!anyInputON){
-
-            for (int i = 0; i < 8; i++) {
-                // Wyłączenie wszystkiego 
-                ExOutput.digitalWrite(i, HIGH);
-
+        String curr_pin = String(ExInput.digitalRead(i));
+        delay(1000);
+        if (curr_pin == "1") {
+            doc["pin_" + String(i)] = "ON";
+                doc["piec_pompa"] = "OFF";
+                doc["led"] = "OFF";
+            ExOutput.digitalWrite(i, HIGH);
+            ExOutput.digitalWrite(P6, LOW);  //  LED ON
+            ExOutput.digitalWrite(P7, LOW); // Pompa ON 
+            anyInputON = true; // znaleziono zwarte wejście
+            Serial.print("znaleziono zwarcie wejście "+  String(i));
+        }else 
+        }else{
+           ExOutput.digitalWrite(i, LOW);
+           doc["pin_" + String(i)] = "OFF";
+        }else if (!anyInputON)
+        {
+        
+                // Wyłączenie wszystkiego
+                      ExOutput.digitalWrite(i, HIGH);
+                      ExOutput.digitalWrite(P6, HIGH);  //  LED OFF
+                      ExOutput.digitalWrite(P7, HIGH); // Pompa OFF
                 doc["pin_" + String(i)] = "OFF";
                 doc["piec_pompa"] = "OFF";
                 doc["led"] = "OFF";
-            }
         }
+        //Serial.println(curr_pin);
+  };
 
-           
+
+    //  if(!anyInputON){
+
+    //           String message = "{\"response\":\"brak zwarcia\"}";
+    //               webSocket.broadcastTXT(message);
+
+    //         for (int i = 0; i < 8; i++) {
+    //             // Wyłączenie wszystkiego 
+    //             ExOutput.digitalWrite(i, HIGH);
+    //             doc["pin_" + String(i)] = "OFF";
+    //             doc["piec_pompa"] = "OFF";
+    //             doc["led"] = "OFF";
+    //         }
+    //     }
 
 
+
+
+    // if(anyInputON == true){
+          
+    //       for (int i = 0; i < 6; i++) {
+
+    //       String curr_pin2 = String(ExInput.digitalRead(i));
+
+    //               ExOutput.digitalWrite(P6, LOW); // pin 7 (piec, pompa) 
+    //               doc["piec_pompa"] = "ON";
+    //               ExOutput.digitalWrite(P7, LOW); // pin 8 (LED INDICATOR)
+    //               doc["led"] = "ON";
+
+    //               if (curr_pin2 == "1") {
+    //               ExOutput.digitalWrite(i, HIGH);
+    //               doc["pin_" + String(i)] = "ON"; 
+    //               }else{
+    //               doc["pin_" + String(i)] = "OFF";
+    //               ExOutput.digitalWrite(i, LOW);          
+    //               }
+        
+    //     }
+    // }
+        
+        
+        
+   
+        
 
         //  ExOutput.digitalWrite(P6, LOW); // wylaczenie pin 7 (piec, pompa) 
         //  ExOutput.digitalWrite(P7, HIGH);   // wyłączenie pinu LED 
