@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include <ArduinoOTA.h>
 #include "PCF8574.h"
 #include <Wire.h>
 #include "Timers.h"
@@ -7,14 +8,37 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <webPage.h>
-#include  <ArduinoOTA.h>
-#include <IotWebConf.h>
+#include <WebSocketsServer.h>
+unsigned long lastSendTime = 0;
+WebSocketsServer webSocket(8080);
+
+void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+ 
+    case WStype_DISCONNECTED:
+      // obsługa rozłączenia klienta
+      Serial.println("Client disconnected from WebSocket ");
+      break;
+    // case WStype_TEXT: 
+    //   // obsługa wiadomości tekstowej od klienta
+    //   String messageText = String((char*)payload).substring(0, length);
+    //   //Serial.println("Otrzymano wiadomość tekstową od klienta: " + messageText);
+    //   break; // dodaj instrukcję break; tutaj
+    case WStype_CONNECTED:
+      // obsługa połączenia klienta
+      String message = "{\"response\":\"connected\"}";
+      webSocket.sendTXT(num, message);
+      break;
+  }
+}
+
+
 
 StaticJsonDocument<200> doc;
  
 
 
-
+#include <IotWebConf.h>
 const char thingName[] = "Netatmo_Relay";
 const char wifiInitialApPassword[] = "pmgana921";
 void handleRoot();
@@ -32,11 +56,7 @@ void handleRoot()
   }
     server.send(200, "text/html", webpage);
 }
-void handleData(){
 
-    server.send(200, "text/json", "AJAXc");
-
-}
 
 
 //ESP8266WebServer server(80); // utworzenie obiektu serwera HTTP na porcie 80
@@ -117,7 +137,7 @@ void setup() {
   // -- Set up required URL handlers on the web server.
   server.on("/", handleRoot);
   server.on("/config", []{ iotWebConf.handleConfig(); });
-  server.on("/params", []{ handleData(); });
+  
   server.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   Serial.println("Ready.");
@@ -126,9 +146,14 @@ void setup() {
 
 
 
-// uruchomienie serwera HTTP
-server.begin();
-Serial.println("HTTP server started");
+  // uruchomienie serwera HTTP
+  server.begin();
+  Serial.println("HTTP server started");
+
+  // uruchomienie serwera WebSocket
+  webSocket.begin();
+  webSocket.onEvent(onWsEvent);
+  Serial.println("WebSocket server started");
 
 
  //  ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
@@ -159,12 +184,12 @@ Serial.println("error");
 
 blinkOutput(20);
 
-
+otaStart();
 initInputExpander();
 //timers.attach(0, 1000, mainValveController);
 
 
-otaStart();
+
  
 
 }
@@ -173,8 +198,6 @@ otaStart();
 
 void loop() {
 
-  String outputJSON; 
-
   doc["pin_1"]="OFF";
   doc["pin_2"]="OFF";
   doc["pin_3"]="OFF";
@@ -182,55 +205,87 @@ void loop() {
   doc["pin_5"]="OFF";
   doc["pin_6"]="OFF";
 
-
-  delay(600);
+  delay(800);
   iotWebConf.doLoop();
 
   //timers.process();
   
   bool anyInputON = false; 
-  
    // sprawdzenie stanu 6 wejść na pierwszym ekspanderze
   for (int i = 0; i < 6; i++) {
-    
-    if (String(ExInput.digitalRead(i)) == "0"){
-        ExOutput.digitalWrite(i, LOW);
-    }
-    if (String(ExInput.digitalRead(i)) == "1") {
-     
-        doc["pin_" + String(i)] = "ON";
-        anyInputON = true; // znaleziono zwarte wejście
-        ExOutput.digitalWrite(i, HIGH); // włączenie odpowiedniego pinu na drugim ekspanderze
-        
-       // Serial.print("OGRZEWANIE POKÓJ :  ");
-       // Serial.print(i);
-
-        ExOutput.digitalWrite(P6, LOW); // pin 7 (piec)(pompa) 
-        doc["piec_pompa"] = "ON";
-        ExOutput.digitalWrite(P7, LOW); // pin 8 (LED INDICATOR)
-        doc["led"] = "ON";
-    }else {
-          ExOutput.digitalWrite(i, HIGH);  // wyłączenie reszty pinow na drugim ekspanderze 
-          ExOutput.digitalWrite(P7, HIGH);   // wyłączenie pinu LED 
-          doc["pin_" + String(i)] = "OFF";
-          doc["piec_pompa"] = "OFF";
-          doc["led"] = "OFF";
-
-    }
-    
-  }
-
-   //  nie znaleziono zwartych wejść, wyłącz wszystko na drugim ekspanderze
-  if (!anyInputON) {
-
-        for (int i = 0; i < 8; i++) {
-          ExOutput.digitalWrite(i,  HIGH);
+        if (String(ExInput.digitalRead(i)) == "1") {
+          anyInputON = true; // znaleziono zwarte wejście
+          Serial.print('znaleziono zwarcie wejście '+  i);
         }
+
   }
+
+
+        if(anyInputON == true){
+
+                  // Załączenie pompy, pieca i LED 
+                  ExOutput.digitalWrite(P6, LOW); // pin 7 (piec, pompa) 
+                  doc["piec_pompa"] = "ON";
+                  ExOutput.digitalWrite(P7, LOW); // pin 8 (LED INDICATOR)
+                  doc["led"] = "ON";
+            
+            for (int i = 0; i < 6; i++) {
+            if (String(ExInput.digitalRead(i)) == "1") {
+                  ExOutput.digitalWrite(i, HIGH);
+                  doc["pin_" + String(i)] = "ON"; 
+            }else{
+                  doc["pin_" + String(i)] = "OFF";
+                  ExOutput.digitalWrite(i, LOW);          
+            }
+           
+               
+
+            }
+   
+        } 
+
+        if(!anyInputON){
+
+            for (int i = 0; i < 8; i++) {
+                // Wyłączenie wszystkiego 
+                ExOutput.digitalWrite(i, HIGH);
+
+                doc["pin_" + String(i)] = "OFF";
+                doc["piec_pompa"] = "OFF";
+                doc["led"] = "OFF";
+            }
+        }
+
+           
+
+
+
+        //  ExOutput.digitalWrite(P6, LOW); // wylaczenie pin 7 (piec, pompa) 
+        //  ExOutput.digitalWrite(P7, HIGH);   // wyłączenie pinu LED 
+        //  
+         
+
+    
+
+   
   
+  
+   String outputJSON;
   serializeJson(doc, outputJSON);
-  Serial.println(outputJSON);
+ //Serial.println(outputJSON);
 
 
+
+  // sprawdzanie, czy upłynęło co najmniej 20 sekund od ostatniego wysłania
+  if (millis() - lastSendTime > 9000) {
+    // wysyłanie ciągu znaków do wszystkich połączonych klientów
+    webSocket.broadcastTXT(outputJSON);
+    Serial.println(outputJSON);
+    // zapamiętanie czasu ostatniego wysłania
+    lastSendTime = millis();
+  }
+
+
+    webSocket.loop();
     ArduinoOTA.handle();
 }
