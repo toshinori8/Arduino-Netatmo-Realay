@@ -212,42 +212,38 @@ void loop() {
 
   //timers.process();
   
-  bool anyInputON = false; 
-  
-   // sprawdzenie stanu 6 wejść na pierwszym ekspanderze
-  for (int i = 0; i < 6; i++) {
-    
-    if (String(ExInput.digitalRead(i)) == "1") {
-     
-        doc["pin_" + String(i)] = "ON";
-        anyInputON = true; // znaleziono zwarte wejście
-        ExOutput.digitalWrite(i, LOW); // włączenie odpowiedniego pinu na drugim ekspanderze
-        
-       // Serial.print("OGRZEWANIE POKÓJ :  ");
-       // Serial.print(i);
+  bool anyInputON = false;
 
-        ExOutput.digitalWrite(P6, LOW); // pin 7 (piec)(pompa) 
-        doc["piec_pompa"] = "ON";
-        ExOutput.digitalWrite(P7, LOW); // pin 8 (LED INDICATOR)
-        doc["led"] = "ON";
-    }else {
-          ExOutput.digitalWrite(i, HIGH);  // wyłączenie reszty pinow na drugim ekspanderze 
-          ExOutput.digitalWrite(P7, HIGH);   // wyłączenie pinu LED 
-          doc["pin_" + String(i)] = "OFF";
-          doc["piec_pompa"] = "OFF";
-          doc["led"] = "OFF";
+// sprawdzenie stanu 6 wejść na pierwszym ekspanderze
+for (int i = 0; i < 6; i++) {
+  if (String(ExInput.digitalRead(i)) == "1") {
+    anyInputON = true; // znaleziono zwarte wejście
+    doc["pin_" + String(i)] = "ON";
+  } else {
+    doc["pin_" + String(i)] = "OFF";
+  }
+}
 
+// jeśli znaleziono zwarte wejście, to wyłącz pozostałe piny na drugim ekspanderze
+if (anyInputON) {
+  for (int i = 0; i < 8; i++) {
+    if (i != 7 && i != 8) { // pomiń piny 7 i 8 (pompa i LED)
+      ExOutput.digitalWrite(i, HIGH);
     }
-    
   }
-
-   //  nie znaleziono zwartych wejść, wyłącz wszystko na drugim ekspanderze
-  if (!anyInputON) {
-
-        for (int i = 0; i < 8; i++) {
-          ExOutput.digitalWrite(i,  HIGH);
-        }
+  doc["piec_pompa"] = "ON";
+  ExOutput.digitalWrite(P6, LOW); // włącz pin 7 (piec)(pompa)
+  doc["led"] = "ON";
+  ExOutput.digitalWrite(P7, LOW); // włącz pin 8 (LED INDICATOR)
+}
+// jeśli nie znaleziono zwartych wejść, to wyłącz wszystko na drugim ekspanderze
+else {
+  for (int i = 0; i < 8; i++) {
+    ExOutput.digitalWrite(i, HIGH);
   }
+  doc["piec_pompa"] = "OFF";
+  doc["led"] = "OFF";
+}
    String outputJSON;
   serializeJson(doc, outputJSON);
  //Serial.println(outputJSON);
