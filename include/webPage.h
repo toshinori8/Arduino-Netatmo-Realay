@@ -515,6 +515,16 @@ const char webpage[] PROGMEM = R"rawliteral(
                   break;
                 }
               }
+            const message = {
+            pin: i,
+              state: checked
+              };
+
+              console.log(message);
+
+              // send the message through the WebSocket
+              webSocket.send(JSON.stringify(message));
+
               document.body.classList.toggle('orange', checked);
             }
           }

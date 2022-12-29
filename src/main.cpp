@@ -9,34 +9,20 @@
 #include <ESP8266WebServer.h>
 #include <webPage.h>
 #include <WebSocketsServer.h>
+#include <functional>
 unsigned long lastSendTime = 0;
 WebSocketsServer webSocket(8080);
 
-void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-  switch (type) {
- 
-    case WStype_DISCONNECTED:
-      // obsługa rozłączenia klienta
-      Serial.println("Client disconnected from WebSocket ");
-      break;
-    // case WStype_TEXT: 
-    //   // obsługa wiadomości tekstowej od klienta
-    //   String messageText = String((char*)payload).substring(0, length);
-    //   //Serial.println("Otrzymano wiadomość tekstową od klienta: " + messageText);
-    //   break; // dodaj instrukcję break; tutaj
-    case WStype_CONNECTED:
-      // obsługa połączenia klienta
-      String message = "{\"response\":\"connected\"}";
-      webSocket.sendTXT(num, message);
-      break;
-  }
-}
+
+
 
 
 
 StaticJsonDocument<200> doc;
- 
+ StaticJsonDocument<200> docInput;
 
+
+ 
 
 #include <IotWebConf.h>
 const char thingName[] = "Netatmo_Relay";
@@ -112,6 +98,82 @@ void blinkOutput(int timer){
 }
 
 
+// Blinking function 
+template <int PIN>
+void blinkOutputValve(int interval) {
+  static unsigned long last_time = 0;
+  unsigned long current_time = millis();
+  
+  if (current_time - last_time >= interval) {
+    // jeśli minął odpowiedni interwał, zmień stan diody
+    ExOutput.digitalWrite(PIN, !ExOutput.digitalRead(PIN));
+    last_time = current_time;  // zapamiętaj czas zmiany stanu
+  }
+}
+
+// void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+//   switch (type) {
+ 
+//     case WStype_DISCONNECTED:
+//       // obsługa rozłączenia klienta
+//       Serial.println("Client disconnected from WebSocket ");
+//       break;
+//     // case WStype_TEXT: 
+//     //   // obsługa wiadomości tekstowej od klienta
+//     //   String messageText = String((char*)payload).substring(0, length);
+//     //   //Serial.println("Otrzymano wiadomość tekstową od klienta: " + messageText);
+//     //   break; // dodaj instrukcję break; tutaj
+//     case WStype_CONNECTED:
+//       // obsługa połączenia klienta
+//       String message = "{\"response\":\"connected\"}";
+//       webSocket.sendTXT(num, message);
+//       break;
+//   }
+// }
+
+
+
+
+void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED:
+      // handle client disconnection
+      Serial.println("Client disconnected from WebSocket ");
+      break;
+    case WStype_CONNECTED:
+      {
+        // handle client connection
+        String message = "{\"response\":\"connected\"}";
+        webSocket.sendTXT(num, message);
+      }
+      break;
+    case WStype_TEXT: 
+      {
+        // handle incoming text message from client
+        String messageText = String((char*)payload).substring(0, length);
+        // parse the JSON message
+        DeserializationError error = deserializeJson(docInput, messageText);
+        if (error) {
+          Serial.println("Error parsing JSON");
+          return;
+        }
+        // extract the pin number and state from the JSON message
+        int pin = docInput["pin"];
+        int state = docInput["state"];
+        //if (state == "LOW"){state=LOW;};
+        
+        Serial.println(messageText);
+         ExInput.digitalWrite(P0, HIGH);
+        // set the state of the input pin on the PCF8574 input expander
+        
+      }
+      break;
+  }
+}
+
+
+
+
 void mainValveController(){
 
 
@@ -185,6 +247,12 @@ initInputExpander();
 
 
 
+
+
+
+
+
+
 void loop() {
 delay(300);
   doc["pin_1"]="OFF";
@@ -220,7 +288,7 @@ if(anyInputON){
                 ExOutput.digitalWrite(P7, LOW);  // Pompa ON
                 doc["piec_pompa"] = "ON";
                 doc["led"] = "ON";
-                Serial.print("Włączam pompe i led");
+                //Serial.print("Włączam pompe i led");
     
     for (int i = 0; i < 6; i++) {
 
@@ -228,7 +296,15 @@ if(anyInputON){
                 ExOutput.digitalWrite(i, HIGH);
         }
         if(doc["pin_" + String(i)] =="OFF"){
-                ExOutput.digitalWrite(i, LOW);
+                 ExOutput.digitalWrite(i, LOW);
+
+                // int intervals[] = {5 * 1000, 7 * 1000, 3 * 1000, 4 * 1000, 2 * 1000, 6 * 1000};  // tablica z interwałami dla każdego pinu
+
+                // for (int i = 0; i < 6; i++) {
+                //   // timers.attach(i, intervals[i], std::bind(blinkOutputValve<i>, intervals[i]));
+                // }
+
+
         }
 
 
@@ -263,7 +339,7 @@ if(anyInputON){
   if (millis() - lastSendTime > 9000) {
     // wysyłanie ciągu znaków do wszystkich połączonych klientów
     webSocket.broadcastTXT(outputJSON);
-    Serial.println(outputJSON);
+    //Serial.println(outputJSON);
     // zapamiętanie czasu ostatniego wysłania
     lastSendTime = millis();
   }

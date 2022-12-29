@@ -446,6 +446,20 @@
                   break;
                 }
               }
+              // get the current state of the checkbox
+      //const state = this.checked;
+
+              // create a JSON message with the pin number and state
+            const message = {
+            pin: i,
+              state: checked
+              };
+
+              console.log(message);
+
+              // send the message through the WebSocket
+              webSocket.send(JSON.stringify(message));
+              // add a class to the body element based on the checkbox state
               document.body.classList.toggle('orange', checked);
             });
           }
