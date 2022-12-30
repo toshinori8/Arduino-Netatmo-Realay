@@ -250,8 +250,6 @@ if(anyInputON){
 
 }
 
-
-
   
    String outputJSON;
   serializeJson(doc, outputJSON);
