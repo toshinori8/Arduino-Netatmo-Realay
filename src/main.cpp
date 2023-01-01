@@ -163,6 +163,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
         //if (state == "LOW"){state=LOW;};
         
         Serial.println(messageText);
+                  
          ExInput.digitalWrite(P0, HIGH);
         // set the state of the input pin on the PCF8574 input expander
         

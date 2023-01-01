@@ -2,6 +2,7 @@
 
 const char webpage[] PROGMEM = R"rawliteral(
 
+
 <head>
     <meta charset="utf-8" />
     <meta
@@ -442,7 +443,24 @@ const char webpage[] PROGMEM = R"rawliteral(
           );
   
           for (let i = 0; i < checkboxes.length; i++) {
+            
+              checkboxes[i].addEventListener('click', function(){
+                  
+                  const state = this.checked;
+
+      // create a JSON message with the pin number and state
+      const message = {
+        pin: i,
+        state: state ? 'LOW' : 'HIGH'
+      };
+
+            console.log(message);
+      // send the message through the WebSocket
+      socket.send(JSON.stringify(message));
+                  
+              });
             checkboxes[i].addEventListener('change', function () {
+                
               let checked = false;
               for (let j = 0; j < checkboxes.length; j++) {
                 if (checkboxes[j].checked) {
@@ -459,12 +477,12 @@ const char webpage[] PROGMEM = R"rawliteral(
           checkBoxes();
         });
   
-        const socket = new WebSocket(
-          'ws://' + window.location.hostname + ':8080'
-        );
-//          const socket = new WebSocket(
-//          'ws://192.168.8.70:8080'
+//        const socket = new WebSocket(
+//          'ws://' + window.location.hostname + ':8080'
 //        );
+          const socket = new WebSocket(
+          'ws://192.168.8.70:8080'
+        );
   
           
         
@@ -496,6 +514,13 @@ const char webpage[] PROGMEM = R"rawliteral(
 
                   
               }
+              
+              
+              
+    
+              
+              
+              
             const element = document.getElementById(key);
             // Jeśli element istnieje i jest elementem "input type="checkbox""
             if (element && element.type === 'checkbox') {
@@ -515,15 +540,7 @@ const char webpage[] PROGMEM = R"rawliteral(
                   break;
                 }
               }
-            const message = {
-            pin: i,
-              state: checked
-              };
-
-              console.log(message);
-
-              // send the message through the WebSocket
-              webSocket.send(JSON.stringify(message));
+           
 
               document.body.classList.toggle('orange', checked);
             }
