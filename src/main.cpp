@@ -11,6 +11,8 @@
 #include <WebSocketsServer.h>
 #include <functional>
 unsigned long lastSendTime = 0;
+unsigned long previousMillis = 0;  // Variable to store the previous time
+const long interval = 480 * 60 * 1000;  // Interval at which to reset the NodeMCU 
 WebSocketsServer webSocket(8080);
 
 
@@ -18,15 +20,15 @@ WebSocketsServer webSocket(8080);
 
 
 
-StaticJsonDocument<200> doc;
- StaticJsonDocument<200> docInput;
+  StaticJsonDocument<200> doc;
+  StaticJsonDocument<200> docInput;
 
 
  
 
 #include <IotWebConf.h>
 const char thingName[] = "Netatmo_Relay";
-const char wifiInitialApPassword[] = "pmgana921";
+const char wifiInitialApPassword[] = "123456";
 void handleRoot();
 DNSServer dnsServer;
 WebServer server(80);
@@ -44,17 +46,12 @@ void handleRoot()
 }
 
 
-
-//ESP8266WebServer server(80); // utworzenie obiektu serwera HTTP na porcie 80
-
-
-
 // utworzenie obiektu klasy Timers z trzema odliczającymi
-Timers<3> timers;
+// Timers<3> timers;
+
 // obiekty ekspanderów PCF8574
 PCF8574 ExInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
 PCF8574 ExOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
-
 
 
 void otaStart();
@@ -75,10 +72,8 @@ ExInput.digitalWrite(P2, HIGH);
 ExInput.digitalWrite(P3, HIGH);
 ExInput.digitalWrite(P4, HIGH);
 ExInput.digitalWrite(P5, HIGH);
-
-
-
 };
+
 void initOutputExpander(){
    for (int i = 0; i < 7; i++) {
  
@@ -87,9 +82,7 @@ void initOutputExpander(){
 }
 };
 
-
 void blinkOutput(int timer){
-
   for (int i = 0; i < 7; i++) {
   ExOutput.digitalWrite(i,  LOW);
   delay(timer);
@@ -98,42 +91,7 @@ void blinkOutput(int timer){
 }
 
 
-// Blinking function 
-template <int PIN>
-void blinkOutputValve(int interval) {
-  static unsigned long last_time = 0;
-  unsigned long current_time = millis();
-  
-  if (current_time - last_time >= interval) {
-    // jeśli minął odpowiedni interwał, zmień stan diody
-    ExOutput.digitalWrite(PIN, !ExOutput.digitalRead(PIN));
-    last_time = current_time;  // zapamiętaj czas zmiany stanu
-  }
-}
-
-// void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-//   switch (type) {
- 
-//     case WStype_DISCONNECTED:
-//       // obsługa rozłączenia klienta
-//       Serial.println("Client disconnected from WebSocket ");
-//       break;
-//     // case WStype_TEXT: 
-//     //   // obsługa wiadomości tekstowej od klienta
-//     //   String messageText = String((char*)payload).substring(0, length);
-//     //   //Serial.println("Otrzymano wiadomość tekstową od klienta: " + messageText);
-//     //   break; // dodaj instrukcję break; tutaj
-//     case WStype_CONNECTED:
-//       // obsługa połączenia klienta
-//       String message = "{\"response\":\"connected\"}";
-//       webSocket.sendTXT(num, message);
-//       break;
-//   }
-// }
-
-
-
-
+// Obsługa eventow Websocket 
 void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
@@ -175,21 +133,9 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
 
 
 
-void mainValveController(){
-
-
-  
-}
-
-
-
 void setup() {
 
- 
-
-  
   Serial.begin(9600);
-
 
   Serial.println();
   Serial.println("Starting up...");
@@ -238,7 +184,7 @@ blinkOutput(20);
 
 otaStart();
 initInputExpander();
-//timers.attach(0, 1000, mainValveController);
+//timers.attach(0, 1000, functionName);
 
 
 
@@ -255,7 +201,12 @@ initInputExpander();
 
 
 void loop() {
-delay(300);
+
+unsigned long currentMillis = millis();  // Get the current time
+
+delay(400);
+
+
   doc["pin_1"]="OFF";
   doc["pin_2"]="OFF";
   doc["pin_3"]="OFF";
@@ -263,20 +214,17 @@ delay(300);
   doc["pin_5"]="OFF";
   doc["pin_6"]="OFF";
   
-  iotWebConf.doLoop();
-
-  //delay(200);
-  //timers.process();
-  
-   bool anyInputON = false; 
+  bool anyInputON = false; 
 
 // Utworzenie JSON ze stanu 6 wejść na pierwszym ekspanderze
 for (int i = 0; i < 6; i++) {
+    // odczytanie stanu pinu i przypisanie do zmiennej curr_pin
     String curr_pin = String(ExInput.digitalRead(i));
+
+    //  
     if (curr_pin == "1") {
         doc["pin_" + String(i)] = "ON";
         anyInputON = true;       
-        // Serial.print("znaleziono zwarcie wejście " + String(i));
 
     } else {
         doc["pin_" + String(i)] = "OFF";
@@ -284,12 +232,12 @@ for (int i = 0; i < 6; i++) {
     }
 }
 
+  // Jeśli jakiś pin jest w stanie LOW - zwarty do GROUND - to włączamy LED i pompę
 if(anyInputON){
                 ExOutput.digitalWrite(P6, LOW);  // LED ON
                 ExOutput.digitalWrite(P7, LOW);  // Pompa ON
                 doc["piec_pompa"] = "ON";
                 doc["led"] = "ON";
-                //Serial.print("Włączam pompe i led");
     
     for (int i = 0; i < 6; i++) {
 
@@ -328,22 +276,28 @@ if(anyInputON){
 }
 
   
-   String outputJSON;
-  serializeJson(doc, outputJSON);
- //Serial.println(outputJSON);
+    String outputJSON;
+    serializeJson(doc, outputJSON);
+    //Serial.println(outputJSON);
 
 
 
   // sprawdzanie, czy upłynęło co najmniej 20 sekund od ostatniego wysłania
   if (millis() - lastSendTime > 9000) {
-    // wysyłanie ciągu znaków do wszystkich połączonych klientów
-    webSocket.broadcastTXT(outputJSON);
-    //Serial.println(outputJSON);
-    // zapamiętanie czasu ostatniego wysłania
-    lastSendTime = millis();
+      // wysyłanie info do klientów
+      webSocket.broadcastTXT(outputJSON);
+      lastSendTime = millis();
   }
 
+  
+  // Sprawdzenie, czy upłynęło 20 minut od ostatniego restartu
+  if (currentMillis - previousMillis >= interval) {
+    ESP.restart();  // Restart the NodeMCU
+    previousMillis = currentMillis; 
+  }
 
-    webSocket.loop();
-    ArduinoOTA.handle();
+      iotWebConf.doLoop();
+      //timers.process();
+      webSocket.loop();
+      ArduinoOTA.handle();
 }
