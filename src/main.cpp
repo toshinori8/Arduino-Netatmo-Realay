@@ -28,7 +28,7 @@ WebSocketsServer webSocket(8080);
 
 #include <IotWebConf.h>
 const char thingName[] = "Netatmo_Relay";
-const char wifiInitialApPassword[] = "123456";
+const char wifiInitialApPassword[] = "12345678";
 void handleRoot();
 DNSServer dnsServer;
 WebServer server(80);
@@ -291,10 +291,10 @@ if(anyInputON){
 
   
   // Sprawdzenie, czy upłynęło 20 minut od ostatniego restartu
-  if (currentMillis - previousMillis >= interval) {
-    ESP.restart();  // Restart the NodeMCU
-    previousMillis = currentMillis; 
-  }
+  // if (currentMillis - previousMillis >= interval) {
+  //   ESP.restart();  // Restart the NodeMCU
+  //   previousMillis = currentMillis; 
+  // }
 
       iotWebConf.doLoop();
       //timers.process();
