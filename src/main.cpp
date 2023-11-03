@@ -11,20 +11,13 @@
 #include <WebSocketsServer.h>
 #include <functional>
 unsigned long lastSendTime = 0;
-unsigned long previousMillis = 0;  // Variable to store the previous time
-const long interval = 480 * 60 * 1000;  // Interval at which to reset the NodeMCU 
+unsigned long previousMillis = 0;      // Variable to store the previous time
+const long interval = 480 * 60 * 1000; // Interval at which to reset the NodeMCU
 WebSocketsServer webSocket(8080);
 
+bool useGaz_ = true; // use gas? button on webPage
 
-
-
-
-
-  StaticJsonDocument<200> doc;
-  StaticJsonDocument<200> docInput;
-
-
- 
+StaticJsonDocument<200> doc;
 
 #include <IotWebConf.h>
 const char thingName[] = "Netatmo_Relay";
@@ -34,7 +27,25 @@ DNSServer dnsServer;
 WebServer server(80);
 IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
 
+String forced;
+String state;
+String pin;
 
+void prepareDataForWebServer()
+{
+
+  doc["pin_0"]["state"] = "OFF";
+  doc["pin_0"]["forced"] = "false";
+
+  doc["pin_1"]["state"] = "OFF";
+  doc["pin_1"]["forced"] = "false";
+
+  doc["pin_2"]["state"] = "OFF";
+  doc["pin_2"]["forced"] = "false";
+
+  doc["pin_3"]["state"] = "OFF";
+  doc["pin_3"]["forced"] = "false";
+}
 
 void handleRoot()
 {
@@ -42,98 +53,121 @@ void handleRoot()
   {
     return;
   }
-    server.send(200, "text/html", webpage);
+  server.send(200, "text/html", webpage);
 }
-
 
 // utworzenie obiektu klasy Timers z trzema odliczającymi
 // Timers<3> timers;
 
 // obiekty ekspanderów PCF8574
-PCF8574 ExInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
-PCF8574 ExOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
-
+PCF8574 ExpInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
+PCF8574 ExpOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
 
 void otaStart();
 
-void initInputExpander(){
-// ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
+void initInputExpander()
+{
+  // ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
 
-ExInput.pinMode(P0, INPUT_PULLUP);
-ExInput.pinMode(P1, INPUT_PULLUP);
-ExInput.pinMode(P2, INPUT_PULLUP);
-ExInput.pinMode(P3, INPUT_PULLUP);
-ExInput.pinMode(P4, INPUT_PULLUP);
-ExInput.pinMode(P5, INPUT_PULLUP);
+  ExpInput.pinMode(P0, INPUT_PULLUP);
+  ExpInput.pinMode(P1, INPUT_PULLUP);
+  ExpInput.pinMode(P2, INPUT_PULLUP);
+  ExpInput.pinMode(P3, INPUT_PULLUP);
+  ExpInput.pinMode(P4, INPUT_PULLUP);
+  ExpInput.pinMode(P5, INPUT_PULLUP);
 
-ExInput.digitalWrite(P0, HIGH);
-ExInput.digitalWrite(P1, HIGH);
-ExInput.digitalWrite(P2, HIGH);
-ExInput.digitalWrite(P3, HIGH);
-ExInput.digitalWrite(P4, HIGH);
-ExInput.digitalWrite(P5, HIGH);
+  ExpInput.digitalWrite(P0, HIGH);
+  ExpInput.digitalWrite(P1, HIGH);
+  ExpInput.digitalWrite(P2, HIGH);
+  ExpInput.digitalWrite(P3, HIGH);
+  ExpInput.digitalWrite(P4, HIGH);
+  ExpInput.digitalWrite(P5, HIGH);
 };
 
-void initOutputExpander(){
-   for (int i = 0; i < 7; i++) {
- 
-  ExOutput.pinMode(i, OUTPUT);
-  ExOutput.digitalWrite(i,  HIGH);
+void initOutputExpander()
+{
+  for (int i = 0; i < 7; i++)
+  {
+
+    ExpOutput.pinMode(i, OUTPUT);
+    ExpOutput.digitalWrite(i, HIGH);
+  }
+};
+
+void blinkOutput(int timer)
+{
+  for (int i = 0; i < 7; i++)
+  {
+    ExpOutput.digitalWrite(i, LOW);
+    delay(timer);
+    ExpOutput.digitalWrite(i, HIGH);
+  }
 }
-};
+void useGaz(void)
+{
 
-void blinkOutput(int timer){
-  for (int i = 0; i < 7; i++) {
-  ExOutput.digitalWrite(i,  LOW);
-  delay(timer);
-  ExOutput.digitalWrite(i,  HIGH);
+  ExpOutput.digitalWrite(P6, LOW); // LED ON
+  ExpOutput.digitalWrite(P7, LOW); // Pompa ON
+  doc["piec_pompa"] = "ON";
+  doc["led"] = "ON";
+}
+// Obsługa eventow Websocket
+void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
+{
+  switch (type)
+  {
+  case WStype_DISCONNECTED:
+    // handle client disconnection
+    Serial.println("Client disconnected from WebSocket ");
+    break;
+  case WStype_CONNECTED:
+  {
+    // handle client connection
+    String message = "{\"response\":\"connected\"}";
+    webSocket.sendTXT(num, message);
+  }
+  break;
+  case WStype_TEXT:
+  {
+    StaticJsonDocument<200> docInput;
+    // handle incoming text message from client
+    String messageText = String((char *)payload).substring(0, length);
+    // parse the JSON message
+    DeserializationError error = deserializeJson(docInput, messageText);
+    if (error)
+    {
+      Serial.println("Error parsing JSON");
+      return;
+    }
+    // extract the pin number and state from the JSON message
+    pin = String(docInput["pin"]);
+    forced = String(docInput["forced"]);
+    state = String(docInput["state"]);
+
+    if (forced == "true")
+    {
+      doc[pin]["state"] = "ON";
+      doc[pin]["forced"] = "true";
+    }
+    else
+    {
+
+      doc[pin]["state"] = "OFF";
+      doc[pin]["forced"] = "false";
+    }
+
+    // char data[200];
+    // size_t len = serializeJson(doc, data);
+    // webSocket.sendTXT(len, data);
+    // ExpOutput.digitalWrite(P0, HIGH);
+    // set the state of the input pin on the PCF8574 input expander
+  }
+  break;
   }
 }
 
-
-// Obsługa eventow Websocket 
-void onWsEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-  switch (type) {
-    case WStype_DISCONNECTED:
-      // handle client disconnection
-      Serial.println("Client disconnected from WebSocket ");
-      break;
-    case WStype_CONNECTED:
-      {
-        // handle client connection
-        String message = "{\"response\":\"connected\"}";
-        webSocket.sendTXT(num, message);
-      }
-      break;
-    case WStype_TEXT: 
-      {
-        // handle incoming text message from client
-        String messageText = String((char*)payload).substring(0, length);
-        // parse the JSON message
-        DeserializationError error = deserializeJson(docInput, messageText);
-        if (error) {
-          Serial.println("Error parsing JSON");
-          return;
-        }
-        // extract the pin number and state from the JSON message
-        int pin = docInput["pin"];
-        int state = docInput["state"];
-        //if (state == "LOW"){state=LOW;};
-        
-        Serial.println(messageText);
-                  
-         ExInput.digitalWrite(P0, HIGH);
-        // set the state of the input pin on the PCF8574 input expander
-        
-      }
-      break;
-  }
-}
-
-
-
-
-void setup() {
+void setup()
+{
 
   Serial.begin(9600);
 
@@ -145,159 +179,152 @@ void setup() {
 
   // -- Set up required URL handlers on the web server.
   server.on("/", handleRoot);
-  server.on("/config", []{ iotWebConf.handleConfig(); });
-  
-  server.onNotFound([](){ iotWebConf.handleNotFound(); });
+  server.on("/config", []
+            { iotWebConf.handleConfig(); });
+
+  server.onNotFound([]()
+                    { iotWebConf.handleNotFound(); });
   Serial.println("Ready.");
 
   // uruchomienie serwera HTTP
   server.begin();
   Serial.println("HTTP server started");
 
+  // przygotowanie zmienych do odbioru z webpage
+  prepareDataForWebServer();
+
   // uruchomienie serwera WebSocket
   webSocket.begin();
   webSocket.onEvent(onWsEvent);
   Serial.println("WebSocket server started");
 
- //  ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
- initInputExpander();
- initOutputExpander();
+  //  ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
+  initInputExpander();
+  initOutputExpander();
 
-// INICJALIZACJA PCF 
-Serial.print("Init input Expander...");
-if (ExInput.begin( )) {
-Serial.println("OK");
-} else {
-Serial.println("error");
-}
-
-initInputExpander();
-
-Serial.print("Init output Expander...");
-if (ExOutput.begin()) {
-Serial.println("OK");
-} else {
-Serial.println("error");
-}
-
-blinkOutput(20);
-
-otaStart();
-initInputExpander();
-//timers.attach(0, 1000, functionName);
-
-
-
- 
-
-}
-
-
-
-
-
-
-
-
-
-void loop() {
-
-unsigned long currentMillis = millis();  // Get the current time
-
-delay(400);
-
-
-  doc["pin_1"]="OFF";
-  doc["pin_2"]="OFF";
-  doc["pin_3"]="OFF";
-  doc["pin_4"]="OFF";
-  doc["pin_5"]="OFF";
-  doc["pin_6"]="OFF";
-  
-  bool anyInputON = false; 
-
-// Utworzenie JSON ze stanu 6 wejść na pierwszym ekspanderze
-for (int i = 0; i < 6; i++) {
-    // odczytanie stanu pinu i przypisanie do zmiennej curr_pin
-    String curr_pin = String(ExInput.digitalRead(i));
-
-    //  
-    if (curr_pin == "1") {
-        doc["pin_" + String(i)] = "ON";
-        anyInputON = true;       
-
-    } else {
-        doc["pin_" + String(i)] = "OFF";
-       
-    }
-}
-
-  // Jeśli jakiś pin jest w stanie LOW - zwarty do GROUND - to włączamy LED i pompę
-if(anyInputON){
-                ExOutput.digitalWrite(P6, LOW);  // LED ON
-                ExOutput.digitalWrite(P7, LOW);  // Pompa ON
-                doc["piec_pompa"] = "ON";
-                doc["led"] = "ON";
-    
-    for (int i = 0; i < 6; i++) {
-
-        if(doc["pin_" + String(i)] =="ON"){
-                ExOutput.digitalWrite(i, HIGH);
-        }
-        if(doc["pin_" + String(i)] =="OFF"){
-                 ExOutput.digitalWrite(i, LOW);
-
-                // int intervals[] = {5 * 1000, 7 * 1000, 3 * 1000, 4 * 1000, 2 * 1000, 6 * 1000};  // tablica z interwałami dla każdego pinu
-
-                // for (int i = 0; i < 6; i++) {
-                //   // timers.attach(i, intervals[i], std::bind(blinkOutputValve<i>, intervals[i]));
-                // }
-
-
-        }
-
-
-    }
-
-}else{
-                // Serial.println("Wyłączam pompę i led");
-                ExOutput.digitalWrite(P6, HIGH);  // LED OFF
-                ExOutput.digitalWrite(P7, HIGH);  // Pompa OFF
-                doc["piec_pompa"] = "OFF";
-                doc["led"] = "OFF";
-
-                for (int i = 0; i < 6; i++) {
-                
-                ExOutput.digitalWrite(i, HIGH);
-
-
-                }
-
-}
-
-  
-    String outputJSON;
-    serializeJson(doc, outputJSON);
-    //Serial.println(outputJSON);
-
-
-
-  // sprawdzanie, czy upłynęło co najmniej 20 sekund od ostatniego wysłania
-  if (millis() - lastSendTime > 9000) {
-      // wysyłanie info do klientów
-      webSocket.broadcastTXT(outputJSON);
-      lastSendTime = millis();
+  // INICJALIZACJA PCF
+  Serial.print("Init input Expander...");
+  if (ExpInput.begin())
+  {
+    Serial.println("OK");
+  }
+  else
+  {
+    Serial.println("error");
   }
 
+  initInputExpander();
+
+  Serial.print("Init output Expander...");
+  if (ExpOutput.begin())
+  {
+    Serial.println("OK");
+  }
+  else
+  {
+    Serial.println("error");
+  }
+
+  // blinkOutput(20);
+
+  otaStart();
+  initInputExpander();
+  // timers.attach(0, 1000, functionName);
+}
+bool anyForcedON = false;
+
+void loop()
+{
+
+  unsigned long currentMillis = millis(); // Get the current time
+
+  delay(400);
+
+  bool anyInputON = false;
+
+  // Upfdate JSON doc from six states on first expander
+
+  for (int i = 0; i < 6; i++)
+  {
+    // odczytanie stanu pinu i zmiana stanu wyjścia jesli nie jest ustawiona flaga FORCED
+    String curr_pin = String(ExpInput.digitalRead(i));
+
+    if (doc["pin_" + String(i)]["forced"] == "true")
+    {
+
+      ExpOutput.digitalWrite(i, HIGH);
+      anyForcedON = true;
+    }
+    else
+    {
+
+      ExpOutput.digitalWrite(i, LOW);
+    }
+    if (doc["pin_" + String(i)]["forced"] == "false")
+    {
+
+      if (curr_pin == "1")
+      {
+
+        ExpOutput.digitalWrite(i, HIGH);
+        anyInputON = true;
+      }
+      else
+      {
+        ExpOutput.digitalWrite(i, LOW);
+      }
+    }
+  }
   
+  if (anyInputON)
+  {
+    // useGaz();
+  }
+
+  if (anyForcedON && useGaz_)
+  {
+    // useGaz();
+  }
+
+  // if (anyInputON == false && anyForcedON == false)
+  // {
+  //   // Serial.println("Wyłączam pompę i led");
+  //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
+  //   ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+  //   doc["piec_pompa"] = "OFF";
+  //   doc["led"] = "OFF";
+
+  // for (int i = 0; i < 6; i++){
+
+  //  ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
+
+  // }
+
+  // }
+
+  // WYSYŁANIE JSON PRZEZ WSSOCKET
+  // czy upłynęło co najmniej 20 sekund od ostatniego wysłania
+
+  if (millis() - lastSendTime > 9000)
+  {
+    String outputJSON;
+    serializeJson(doc, outputJSON);
+    // Serial.println(outputJSON);
+    serializeJsonPretty(doc, Serial);
+
+    // wysyłanie info do klientów
+    webSocket.broadcastTXT(outputJSON);
+    lastSendTime = millis();
+  }
+
   // Sprawdzenie, czy upłynęło 20 minut od ostatniego restartu
   // if (currentMillis - previousMillis >= interval) {
   //   ESP.restart();  // Restart the NodeMCU
-  //   previousMillis = currentMillis; 
+  //   previousMillis = currentMillis;
   // }
 
-      iotWebConf.doLoop();
-      //timers.process();
-      webSocket.loop();
-      ArduinoOTA.handle();
+  iotWebConf.doLoop();
+  // timers.process();
+  webSocket.loop();
+  ArduinoOTA.handle();
 }
