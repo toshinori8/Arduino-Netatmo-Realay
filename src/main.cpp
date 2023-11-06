@@ -139,6 +139,18 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       Serial.println("Error parsing JSON");
       return;
     }
+
+    if (docInput["usegaz"])
+    {
+        String gas = String(docInput["usegaz"]);
+        Serial.println("usegaz - detected");
+        if(gas=="true"){
+        useGaz_ = true;
+        }else{
+        useGaz_ = false;
+        }
+    }
+
     // extract the pin number and state from the JSON message
     pin = String(docInput["pin"]);
     forced = String(docInput["forced"]);
@@ -237,10 +249,9 @@ void loop()
 {
 
   unsigned long currentMillis = millis(); // Get the current time
-
-  delay(400);
-
   bool anyInputON = false;
+
+  delay(3400);
 
   // Upfdate JSON doc from six states on first expander
 
@@ -265,42 +276,37 @@ void loop()
 
       if (curr_pin == "1")
       {
-
-        ExpOutput.digitalWrite(i, HIGH);
-        anyInputON = true;
-      }
-      else
-      {
         ExpOutput.digitalWrite(i, LOW);
+
+        anyInputON = true;
       }
     }
   }
-  
-  if (anyInputON)
-  {
-    // useGaz();
-  }
 
-  if (anyForcedON && useGaz_)
-  {
-    // useGaz();
-  }
-
-  // if (anyInputON == false && anyForcedON == false)
+  // if (anyInputON)
   // {
-  //   // Serial.println("Wyłączam pompę i led");
-  //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
-  //   ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
-  //   doc["piec_pompa"] = "OFF";
-  //   doc["led"] = "OFF";
-
-  // for (int i = 0; i < 6; i++){
-
-  //  ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
-
+  //   // useGaz();
   // }
 
+  // if (anyForcedON && useGaz_)
+  // {
+  //   // useGaz();
   // }
+
+  if (anyInputON == 0 && anyForcedON == 0)
+  {
+    Serial.println("Wylanczam pompe i led");
+    //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
+    //   ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+    //   doc["piec_pompa"] = "OFF";
+    //   doc["led"] = "OFF";
+
+    // for (int i = 0; i < 6; i++){
+
+    //  ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
+
+    // }
+  }
 
   // WYSYŁANIE JSON PRZEZ WSSOCKET
   // czy upłynęło co najmniej 20 sekund od ostatniego wysłania
@@ -309,12 +315,14 @@ void loop()
   {
     String outputJSON;
     serializeJson(doc, outputJSON);
-    // Serial.println(outputJSON);
     serializeJsonPretty(doc, Serial);
 
     // wysyłanie info do klientów
     webSocket.broadcastTXT(outputJSON);
     lastSendTime = millis();
+
+    Serial.println(anyInputON);
+    Serial.println(anyForcedON);
   }
 
   // Sprawdzenie, czy upłynęło 20 minut od ostatniego restartu
