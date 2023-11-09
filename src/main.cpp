@@ -243,69 +243,63 @@ void setup()
   initInputExpander();
   // timers.attach(0, 1000, functionName);
 }
-bool anyForcedON = false;
+
 
 void loop()
 {
-
+  bool anyForcedON = 0;
+  bool anyInputON = 0;
   unsigned long currentMillis = millis(); // Get the current time
-  bool anyInputON = false;
 
-  delay(3400);
+  delay(400);
 
   // Upfdate JSON doc from six states on first expander
 
   for (int i = 0; i < 6; i++)
   {
-    // odczytanie stanu pinu i zmiana stanu wyjścia jesli nie jest ustawiona flaga FORCED
     String curr_pin = String(ExpInput.digitalRead(i));
-
+    
     if (doc["pin_" + String(i)]["forced"] == "true")
     {
-
-      ExpOutput.digitalWrite(i, HIGH);
-      anyForcedON = true;
-    }
-    else
-    {
-
-      ExpOutput.digitalWrite(i, LOW);
-    }
-    if (doc["pin_" + String(i)]["forced"] == "false")
-    {
-
-      if (curr_pin == "1")
-      {
-        ExpOutput.digitalWrite(i, LOW);
-
-        anyInputON = true;
-      }
+      anyForcedON = 1;
     }
   }
 
-  // if (anyInputON)
-  // {
-  //   // useGaz();
-  // }
+ if (anyForcedON==1){
+  for (int i = 0; i < 6; i++)
+  {
+    
+    
+    if (doc["pin_" + String(i)]["forced"] == "true")
+    {
+      ExpOutput.digitalWrite(i, HIGH);
+    }else{
+      ExpOutput.digitalWrite(i, LOW);
+    }
+  }
+
+ }
 
   // if (anyForcedON && useGaz_)
   // {
   //   // useGaz();
   // }
 
-  if (anyInputON == 0 && anyForcedON == 0)
+  if (anyForcedON == 0)
   {
-    Serial.println("Wylanczam pompe i led");
+    Serial.println("Pump OFF");
     //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
-    //   ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+      ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
     //   doc["piec_pompa"] = "OFF";
     //   doc["led"] = "OFF";
 
-    // for (int i = 0; i < 6; i++){
 
-    //  ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
+    Serial.println("All valves OFF");
+    for (int i = 0; i < 6; i++){
 
-    // }
+     ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
+
+    }
   }
 
   // WYSYŁANIE JSON PRZEZ WSSOCKET
@@ -321,8 +315,8 @@ void loop()
     webSocket.broadcastTXT(outputJSON);
     lastSendTime = millis();
 
-    Serial.println(anyInputON);
-    Serial.println(anyForcedON);
+    Serial.println(String(anyInputON) + ": anyInputON");
+    Serial.println(String(anyForcedON)+": anyForcedON");
   }
 
   // Sprawdzenie, czy upłynęło 20 minut od ostatniego restartu
