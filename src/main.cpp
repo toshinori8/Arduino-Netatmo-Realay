@@ -28,6 +28,7 @@ WebServer server(80);
 IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
 
 String forced;
+String woodStove;
 String state;
 String pin;
 
@@ -45,6 +46,7 @@ void prepareDataForWebServer()
 
   doc["pin_3"]["state"] = "OFF";
   doc["pin_3"]["forced"] = "false";
+
 }
 
 void handleRoot()
@@ -69,12 +71,16 @@ void initInputExpander()
 {
   // ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
 
-  ExpInput.pinMode(P0, INPUT_PULLUP);
-  ExpInput.pinMode(P1, INPUT_PULLUP);
-  ExpInput.pinMode(P2, INPUT_PULLUP);
-  ExpInput.pinMode(P3, INPUT_PULLUP);
-  ExpInput.pinMode(P4, INPUT_PULLUP);
-  ExpInput.pinMode(P5, INPUT_PULLUP);
+  ExpInput.pinMode(P0, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P1, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P2, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P3, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P4, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P5, INPUT_PULLUP); // netatmo relays input pin
+
+  ExpInput.pinMode(P6, INPUT_PULLUP); // input from stove 
+  ExpInput.pinMode(P7, INPUT_PULLUP); // unused input  
+
 
   ExpInput.digitalWrite(P0, HIGH);
   ExpInput.digitalWrite(P1, HIGH);
@@ -82,6 +88,10 @@ void initInputExpander()
   ExpInput.digitalWrite(P3, HIGH);
   ExpInput.digitalWrite(P4, HIGH);
   ExpInput.digitalWrite(P5, HIGH);
+  
+  ExpInput.digitalWrite(P6, HIGH);
+  ExpInput.digitalWrite(P7, HIGH);  
+
 };
 
 void initOutputExpander()
@@ -263,6 +273,16 @@ void loop()
     {
       anyForcedON = 1;
     }
+  }
+
+  // check woodStove init input
+
+  Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6" );
+  if(String(ExpInput.digitalRead(P6))=="true"){
+
+      Serial.println("WoodStove operating ");
+
+
   }
 
  if (anyForcedON==1){
