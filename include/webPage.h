@@ -1,7 +1,6 @@
 #include <Arduino.h>
 
 const char webpage[] PROGMEM = R"rawliteral(
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1" />
@@ -466,9 +465,9 @@ const char webpage[] PROGMEM = R"rawliteral(
 
     <div class="container">
       <h3 class="noselect">Gościnny</h3>
-      <div class="checkbox-container purple">
+      <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch" id="pin_0" />
+        <input type="checkbox" class="switch noselect" id="pin_0" />
         <label for="pin_0"></label>
         <div class="active-circle"></div>
       </div>
@@ -476,9 +475,9 @@ const char webpage[] PROGMEM = R"rawliteral(
 
     <div class="container">
       <h3 class="noselect">Sypialnia</h3>
-      <div class="checkbox-container purple">
+      <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch" id="pin_1" />
+        <input type="checkbox" class="switch noselect" id="pin_1" />
         <label for="pin_1"></label>
         <div class="active-circle"></div>
       </div>
@@ -486,9 +485,9 @@ const char webpage[] PROGMEM = R"rawliteral(
 
     <div class="container">
       <h3 class="noselect">Kuchnia</h3>
-      <div class="checkbox-container purple">
+      <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch" id="pin_2" />
+        <input type="checkbox" class="switch noselect" id="pin_2" />
         <label for="pin_2"></label>
         <div class="active-circle"></div>
       </div>
@@ -496,9 +495,9 @@ const char webpage[] PROGMEM = R"rawliteral(
 
     <div class="container">
       <h3 class="noselect">Łazienka</h3>
-      <div class="checkbox-container purple">
+      <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch" id="pin_3" />
+        <input type="checkbox" class="switch noselect" id="pin_3" />
         <label for="pin_3"></label>
         <div class="active-circle"></div>
       </div>
@@ -506,18 +505,18 @@ const char webpage[] PROGMEM = R"rawliteral(
 
     <div class="container disabled">
       <h3 class="noselect">Klatka schodowa</h3>
-      <div class="checkbox-container purple">
+      <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch" disabled id="pin_4" />
+        <input type="checkbox" class="switch noselect" disabled id="pin_4" />
         <label for="pin_4"></label>
         <div class="active-circle"></div>
       </div>
     </div>
     <div class="container disabled">
       <h3 class="noselect">Przedpokój</h3>
-      <div class="checkbox-container purple">
+      <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch" id="pin_0" disabled />
+        <input type="checkbox" class="switch noselect" id="pin_0" disabled />
 
         <label for="pin_0"></label>
         <div class="active-circle"></div>
@@ -600,7 +599,7 @@ const char webpage[] PROGMEM = R"rawliteral(
       </svg>
     </p>
 
-    <p class="console"></p>
+    <p class="console noselect"></p>
   </footer>
 
   <script type="text/javascript">
@@ -770,24 +769,50 @@ const char webpage[] PROGMEM = R"rawliteral(
 
     };
 
+socket.onopen= function(){
+
+  messageElements.textContent = "Connected";
+
+};
+
+    socket.onclose = function (e) {
+      
+      console.log('Socket is closed. Reconnect will be attempted in 15 second.', e.reason);
+      let seconds = 15;
+      
+      function incrementSeconds() {
+        seconds -= 1;
+        console.log('Seconds :'+seconds)
+        messageElements.textContent = "reconect: " + seconds;
+      }
+
+      var cancel = setInterval(incrementSeconds, 1000);
+
+      setTimeout(function () {
+        connect();
+      }, 15000);
+    };
+
     const xhr = new XMLHttpRequest();
 
-    function checkServerAvailability() {
-      xhr.open("GET", window.location.hostname);
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          messageElements.textContent = "Connected";
-        } else {
-          messageElements.textContent = "Disconected";
-        }
-      };
-      xhr.send();
-    }
+    // function checkServerAvailability() {
+    //   xhr.open("GET", window.location.hostname);
+    //   xhr.onload = () => {
+    //     if (xhr.status === 200) {
+    //       messageElements.textContent = "Connected";
+    //     } else {
+    //       messageElements.textContent = "Disconected";
+    //     }
+    //   };
+    //   xhr.send();
+    // }
 
-    setInterval(checkServerAvailability, 300000); // co 5 minut
+    // setInterval(checkServerAvailability, 300000); // co 5 minut
+
+ 
+
   </script>
 </body>
-
 </html>
 
 )rawliteral";

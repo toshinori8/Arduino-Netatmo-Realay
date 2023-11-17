@@ -46,6 +46,9 @@ void prepareDataForWebServer()
 
   doc["pin_3"]["state"] = "OFF";
   doc["pin_3"]["forced"] = "false";
+  doc["WoodStove"] = "off";
+
+
 
 }
 
@@ -78,9 +81,8 @@ void initInputExpander()
   ExpInput.pinMode(P4, INPUT_PULLUP); // netatmo relays input pin
   ExpInput.pinMode(P5, INPUT_PULLUP); // netatmo relays input pin
 
-  ExpInput.pinMode(P6, INPUT_PULLUP); // input from stove 
-  ExpInput.pinMode(P7, INPUT_PULLUP); // unused input  
-
+  ExpInput.pinMode(P6, INPUT_PULLUP); // input from stove
+  ExpInput.pinMode(P7, INPUT_PULLUP); // unused input
 
   ExpInput.digitalWrite(P0, HIGH);
   ExpInput.digitalWrite(P1, HIGH);
@@ -88,10 +90,9 @@ void initInputExpander()
   ExpInput.digitalWrite(P3, HIGH);
   ExpInput.digitalWrite(P4, HIGH);
   ExpInput.digitalWrite(P5, HIGH);
-  
-  ExpInput.digitalWrite(P6, HIGH);
-  ExpInput.digitalWrite(P7, HIGH);  
 
+  ExpInput.digitalWrite(P6, HIGH);
+  ExpInput.digitalWrite(P7, HIGH);
 };
 
 void initOutputExpander()
@@ -152,13 +153,16 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
     if (docInput["usegaz"])
     {
-        String gas = String(docInput["usegaz"]);
-        Serial.println("usegaz - detected");
-        if(gas=="true"){
+      String gas = String(docInput["usegaz"]);
+      Serial.println("usegaz - detected");
+      if (gas == "true")
+      {
         useGaz_ = true;
-        }else{
+      }
+      else
+      {
         useGaz_ = false;
-        }
+      }
     }
 
     // extract the pin number and state from the JSON message
@@ -254,7 +258,6 @@ void setup()
   // timers.attach(0, 1000, functionName);
 }
 
-
 void loop()
 {
   bool anyForcedON = 0;
@@ -268,7 +271,7 @@ void loop()
   for (int i = 0; i < 6; i++)
   {
     String curr_pin = String(ExpInput.digitalRead(i));
-    
+
     if (doc["pin_" + String(i)]["forced"] == "true")
     {
       anyForcedON = 1;
@@ -277,28 +280,36 @@ void loop()
 
   // check woodStove init input
 
-  Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6" );
-  if(String(ExpInput.digitalRead(P6))=="true"){
-
-      Serial.println("WoodStove operating ");
-
-
-  }
-
- if (anyForcedON==1){
-  for (int i = 0; i < 6; i++)
+  Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
+  if (String(ExpInput.digitalRead(P6)) == "true")
   {
-    
-    
-    if (doc["pin_" + String(i)]["forced"] == "true")
+
+    Serial.println("WoodStove operating ");
+    doc["WoodStove"] = "on";
+  }  
+  if (String(ExpInput.digitalRead(P6)) == "false")
+  {
+
+    Serial.println("WoodStove off ");
+    doc["WoodStove"] = "off";
+  }
+ 
+
+  if (anyForcedON == 1)
+  {
+    for (int i = 0; i < 6; i++)
     {
-      ExpOutput.digitalWrite(i, HIGH);
-    }else{
-      ExpOutput.digitalWrite(i, LOW);
+
+      if (doc["pin_" + String(i)]["forced"] == "true")
+      {
+        ExpOutput.digitalWrite(i, HIGH);
+      }
+      else
+      {
+        ExpOutput.digitalWrite(i, LOW);
+      }
     }
   }
-
- }
 
   // if (anyForcedON && useGaz_)
   // {
@@ -309,16 +320,15 @@ void loop()
   {
     Serial.println("Pump OFF");
     //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
-      ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+    ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
     //   doc["piec_pompa"] = "OFF";
     //   doc["led"] = "OFF";
 
-
     Serial.println("All valves OFF");
-    for (int i = 0; i < 6; i++){
+    for (int i = 0; i < 6; i++)
+    {
 
-     ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
-
+      ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
     }
   }
 
@@ -336,7 +346,7 @@ void loop()
     lastSendTime = millis();
 
     Serial.println(String(anyInputON) + ": anyInputON");
-    Serial.println(String(anyForcedON)+": anyForcedON");
+    Serial.println(String(anyForcedON) + ": anyForcedON");
   }
 
   // Sprawdzenie, czy upłynęło 20 minut od ostatniego restartu
