@@ -219,8 +219,15 @@
       flex-direction: column;
 
     }
+    .container-modal.unvisible{
 
-    .container-modal.active {}
+      display:none;
+    }
+
+    .container-modal.active {
+
+
+    }
 
     .container-modal .modal-back {
 
@@ -825,6 +832,7 @@
 
       let srcOfImage = "";
 
+      
       // get forecast
       function getForecast() {
         fetch(
@@ -835,7 +843,7 @@
           .then((response) => response.json())
           .then((data_) => {
 
-            console.log(data_)
+         
 
             if (data_.current.temp = -0) { data_.current.temp = 0 }
             //data = data_;
@@ -844,6 +852,7 @@
             document.querySelector('.ifdata').classList.toggle('active');
             $("footer .a_weather").append(`<img  src="${srcOfImage}" alt=""/>`)
             $("footer .a_weather").show();
+            $('.container-modal').hide();
             $('.weather_widget .close, footer .a_weather').on('click', function () {
               $('.container-modal').toggle();
             });
@@ -994,7 +1003,7 @@
   </div>
 
   <div class="ifdata">
-    <div class="container-modal">
+    <div class="container-modal unvisible">
       <div class="modal-back"> </div>
 
       <div
