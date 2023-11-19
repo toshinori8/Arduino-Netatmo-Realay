@@ -30,4 +30,4 @@
 *.exe
 *.out
 *.app
-.pio/build/nodemcuv2/idedata.json
+.pio
