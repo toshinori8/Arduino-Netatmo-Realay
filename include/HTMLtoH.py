@@ -18,7 +18,7 @@ with open(input_file_path, "r") as input_file:
 content = re.sub(r'\s+', ' ', content).strip()
 
 # Dodaj raw string literal na początku i na końcu
-content = "R\"rawliteral(" + content + ")rawliteral\""
+content = "#include <Arduino.h>\n\n const char webpage[] PROGMEM = R\"rawliteral(\n\n" + content + "\n\n)rawliteral\";"
 
 # Zapisz zmieniony plik
 with open(output_file_path, "w") as output_file:
