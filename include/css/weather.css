@@ -1,0 +1,52 @@
+
+.container-modal .close {
+
+    position: absolute;
+  width: 19px;
+  height: 20px;
+  font-family: Arial, Helvetica, sans-serif;
+  padding: 13px;
+  padding-left: 4px;
+  padding-top: 5px;
+  background: white;
+  margin-left: 700px;
+  font-size: 20px;
+  line-height: 10px;
+  margin-top: -1413px;
+  text-align: center;
+  color: gray;
+  padding-bottom: 14px;
+  transition: all ease-in 0.5s;
+  }
+
+  .container-modal .close:hover {
+
+    transform: rotate(45deg);
+  }
+
+
+  .a_weather {
+    display: none;
+    /* background: rgba(255,255,255,0.2); */
+    transition: all ease 0.5s;
+  }
+
+  .a_weather::after {
+
+    content: ''
+
+  }
+
+  .a_weather::hover {
+
+    transform: scale(1.3);
+  }
+
+  .a_weather img {
+  transform: scale(1.2);
+  filter:invert(0.3) contrast(-3) drop-shadow(1px 0px 8px rgba(255,255,255,0.6));
+  }
+
+  .nextHours {
+    display: flex;
+  }
