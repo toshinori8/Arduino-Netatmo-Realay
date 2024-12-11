@@ -9,13 +9,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="application-name" content="Netatmo Relay" />
   <title>Netatmo Relay</title>
-  <link href="//unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet" />
-  <link href="//cdn.tailwindcss.com/" rel="stylesheet" />
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+
   <script src="//cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-  <link href="//fonts.googleapis.com/css?family=Open+Sans:400,700,300,600|Open+Sans+Condensed:300,700" rel="stylesheet" type="text/css" />
-  <script type="text/javascript" src="//unpkg.co/gsap@3/dist/gsap.min.js"></script>
-  <script type="text/javascript" src="//unpkg.com/gsap@3/dist/Draggable.min.js"></script>
+  <script src="//unpkg.co/gsap@3/dist/gsap.min.js" type="text/javascript"></script>
+  <script src="//unpkg.com/gsap@3/dist/Draggable.min.js" type="text/javascript"></script>
   <script src="//code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
   <script src="//cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
@@ -24,12 +21,7 @@
   <script type="module" src="//unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="//unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
   <script src="//cdn.tailwindcss.com"></script>
-  <link href="//fonts.googleapis.com/css?family=Open+Sans:400,700,300,600|Open+Sans+Condensed:300,700" rel="stylesheet" type="text/css" />
-  <link href="//unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet"/>
-  <link href="//cdn.tailwindcss.com/" rel="stylesheet"/>
-  <link href="//cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" rel="stylesheet"/>
 
-<!-- INCLUDE STYLES  -->
   <style type="text/css">* {
   border: 0;
   box-sizing: border-box;
@@ -737,7 +729,12 @@ footer a.a_qrcode ion-icon{
       height: 30px;
       color: rgba(255,255,255,0.7) !important;
   }</style>
-<!-- END INCLUDE STYLES -->
+
+  <link href="//fonts.googleapis.com/css?family=Open+Sans:400,700,300,600|Open+Sans+Condensed:300,700" rel="stylesheet" type="text/css" />
+  <link href="//unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet"/>
+  <link href="//cdn.tailwindcss.com/" rel="stylesheet"/>
+  <link href="//cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" rel="stylesheet"/>
+
 </head>
 
 <html>
@@ -777,7 +774,7 @@ footer a.a_qrcode ion-icon{
 
 
     <div class="container">
-      <h3 class="noselect">Przedpokój</h3>
+      <h3 class="noselect">Gościnny</h3>
       <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
         <input type="checkbox" class="switch noselect" id="pin_0" />
@@ -826,7 +823,7 @@ footer a.a_qrcode ion-icon{
       </div>
     </div>
     <div class="container disabled">
-      <h3 class="noselect">Gościnny</h3>
+      <h3 class="noselect">Przedpokój</h3>
       <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
         <input type="checkbox" class="switch noselect" id="pin_0" disabled />
@@ -848,9 +845,9 @@ footer a.a_qrcode ion-icon{
       <div class="modal-back"> </div>
 
       <div
-        class="weather_widget weather_section flex flex-col items-center justify-center min-h-screen text-gray-700 p-10 ">
+        class="weather_widget weather_section flex flex-col items-center justify-center min-h-screen text-gray-700 p-5 ">
 
-        <div class="close noselect bg-white p-10 rounded-xl ring-8 ring-white ring-opacity-40">+</div>
+        <div class="close noselect bg-white p-5 rounded-xl ring-8 ring-white ring-opacity-40">+</div>
         <div class="w-full max-w-screen-sm owHidden bg-white p-10 rounded-xl ring-8 ring-white ring-opacity-40">
 
 
