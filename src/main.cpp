@@ -47,9 +47,6 @@ void prepareDataForWebServer()
   doc["pin_3"]["state"] = "OFF";
   doc["pin_3"]["forced"] = "false";
   doc["WoodStove"] = "off";
-
-
-
 }
 
 void handleRoot()
