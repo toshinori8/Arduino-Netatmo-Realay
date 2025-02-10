@@ -1,7 +1,7 @@
 # Node.js Thermostat API
 
 ## Opis
-Ten projekt to prosty serwer Node.js, który integruje się z API Netatmo, umożliwiając zarządzanie termostatami. Umożliwia ustawianie temperatury w pokojach oraz pobieranie danych o stanie termostatów.
+Ten projekt to serwer Node.js, który integruje się z API Netatmo, umożliwiając zarządzanie termostatami. Pozwala na ustawianie temperatury w pokojach, zmianę trybu pracy oraz pobieranie danych o stanie termostatów.
 
 ## Struktura projektu
 ```
@@ -17,50 +17,61 @@ nodejs-server
 ```
 
 ## Wymagania
-- Node.js (wersja 14 lub nowsza)
+- Node.js (wersja 20 lub nowsza)
 - NPM (Node Package Manager)
 
 ## Instalacja
 1. Sklonuj repozytorium:
-   ```
-   git clone <URL_REPOZYTORIUM>
-   ```
+  ```
+  git clone <URL_REPOZYTORIUM>
+  ```
 2. Przejdź do katalogu projektu:
-   ```
-   cd nodejs-server
-   ```
+  ```
+  cd nodejs-server
+  ```
 3. Zainstaluj zależności:
-   ```
-   npm install
-   ```
+  ```
+  npm install
+  ```
 
 ## Użycie
 1. Uruchom serwer:
-   ```
-   npm start
-   ```
+  ```
+  npm start
+  ```
 2. Użyj poniższych endpointów do interakcji z API:
 
-   - **Ustaw temperaturę w pokoju**
-     - **Endpoint:** `POST /set-data`
-     - **Parametry:** `room_id`, `temperature`
-   
-   - **Ustaw tryb domu**
-     - **Endpoint:** `POST /set-mode`
-     - **Parametry:** `mode` (np. `away`)
+  - **Ustaw temperaturę w pokoju**
+    - **Endpoint:** `POST /set-data`
+    - **Parametry:**
+     - `room_id` (string) - ID pokoju
+     - `temperature` (number) - Żądana temperatura
 
-   - **Pobierz dane o termostatach**
-     - **Endpoint:** `GET /get-data`
+  - **Ustaw tryb domu**
+    - **Endpoint:** `POST /set-mode`
+    - **Parametry:**
+     - `mode` (string) - Tryb pracy (np. `away`, `home`)
+
+  - **Pobierz dane o termostatach**
+    - **Endpoint:** `GET /get-data`
+    - **Parametry:** Brak
 
 ## Przykłady
 - Ustawienie temperatury w pokoju:
   ```
-  POST /set-data?room_id=<ROOM_ID>&temperature=<TEMPERATURE>
+  POST /set-data
+  Body: {
+   "room_id": "<ROOM_ID>",
+   "temperature": <TEMPERATURE>
+  }
   ```
 
 - Ustawienie trybu domu na "away":
   ```
-  POST /set-mode?mode=away
+  POST /set-mode
+  Body: {
+   "mode": "away"
+  }
   ```
 
 - Pobranie danych o termostatach:
