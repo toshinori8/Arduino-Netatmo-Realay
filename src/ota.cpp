@@ -3,7 +3,7 @@
 
 void otaStart() {
 
-  ArduinoOTA.setHostname("Netatmo_Relay");
+  ArduinoOTA.setHostname("netatmo_relay");
   ArduinoOTA.onStart([]() {
     String type;
     if (ArduinoOTA.getCommand() == U_FLASH) {

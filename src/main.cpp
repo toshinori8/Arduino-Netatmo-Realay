@@ -1,52 +1,61 @@
 #include <Arduino.h>
-
 #include <ArduinoOTA.h>
 #include "PCF8574.h"
 #include <Wire.h>
 #include "Timers.h"
 #include <ArduinoJson.h>
+StaticJsonDocument<8192> docPins;
+StaticJsonDocument<1124> docRooms;
+
 #include <ESP8266WiFi.h>
+#include <espnow.h>
+#include <now.h>
 #include <ESP8266WebServer.h>
 #include <webPage.h>
 #include <WebSocketsServer.h>
 #include <functional>
-unsigned long lastSendTime = 0;
-unsigned long previousMillis = 0;      // Variable to store the previous time
-const long interval = 480 * 60 * 1000; // Interval at which to reset the NodeMCU
-WebSocketsServer webSocket(8080);
+#include <IotWebConf.h>
+#include <roomManager.h>
 
 bool useGaz_ = true; // use gas? button on webPage
-
-StaticJsonDocument<200> doc;
-
-#include <IotWebConf.h>
-const char thingName[] = "Netatmo_Relay";
+const char thingName[] = "netatmo_relay";
 const char wifiInitialApPassword[] = "12345678";
 void handleRoot();
-DNSServer dnsServer;
-WebServer server(80);
-IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
 
 String forced;
 String woodStove;
 String state;
 String pin;
+unsigned long lastSendTime = 0;
+unsigned long previousMillis = 0; // Variable to store the previous time
+// const long interval = 480 * 60 * 1000; // Interval at which to reset the NodeMCU
+
+WebSocketsServer webSocket = WebSocketsServer(81);
+DNSServer dnsServer;
+WebServer server(80);
+IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
+
+
+RoomManager manager;
+
 
 void prepareDataForWebServer()
 {
 
-  doc["pin_0"]["state"] = "OFF";
-  doc["pin_0"]["forced"] = "false";
+  docPins["pin_0"]["state"] = "OFF";
+  docPins["pin_0"]["forced"] = "false";
 
-  doc["pin_1"]["state"] = "OFF";
-  doc["pin_1"]["forced"] = "false";
+  docPins["pin_1"]["state"] = "OFF";
+  docPins["pin_1"]["forced"] = "false";
 
-  doc["pin_2"]["state"] = "OFF";
-  doc["pin_2"]["forced"] = "false";
+  docPins["pin_2"]["state"] = "OFF";
+  docPins["pin_2"]["forced"] = "false";
 
-  doc["pin_3"]["state"] = "OFF";
-  doc["pin_3"]["forced"] = "false";
-  doc["WoodStove"] = "off";
+  docPins["pin_3"]["state"] = "OFF";
+  docPins["pin_3"]["forced"] = "false";
+  docPins["WoodStove"] = "off";
+  docPins["manifoldTemp"] = "";
+  docPins["netatmoData"] = "";
 }
 
 void handleRoot()
@@ -58,8 +67,15 @@ void handleRoot()
   server.send(200, "text/html", webpage);
 }
 
+
+
+void fetchNetatmo() {
+      manager.fetchJsonData(api_url);
+}
+
+
 // utworzenie obiektu klasy Timers z trzema odliczającymi
-// Timers<3> timers;
+Timers<3> timers;
 
 // obiekty ekspanderów PCF8574
 PCF8574 ExpInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
@@ -116,8 +132,8 @@ void useGaz(void)
 
   ExpOutput.digitalWrite(P6, LOW); // LED ON
   ExpOutput.digitalWrite(P7, LOW); // Pompa ON
-  doc["piec_pompa"] = "ON";
-  doc["led"] = "ON";
+  docPins["piec_pompa"] = "ON";
+  docPins["led"] = "ON";
 }
 // Obsługa eventow Websocket
 void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
@@ -126,11 +142,13 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   {
   case WStype_DISCONNECTED:
     // handle client disconnection
-    Serial.println("Client disconnected from WebSocket ");
+    Serial.printf("Client %u disconnected from WebSocket\n", num);
     break;
   case WStype_CONNECTED:
   {
     // handle client connection
+    IPAddress ip = webSocket.remoteIP(num);
+    Serial.printf("Client %u connected from %s\n", num, ip.toString().c_str());
     String message = "{\"response\":\"connected\"}";
     webSocket.sendTXT(num, message);
   }
@@ -140,66 +158,104 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     StaticJsonDocument<200> docInput;
     // handle incoming text message from client
     String messageText = String((char *)payload).substring(0, length);
+    Serial.println("Message from client: " + messageText);
     // parse the JSON message
     DeserializationError error = deserializeJson(docInput, messageText);
     if (error)
     {
       Serial.println("Error parsing JSON");
       return;
+    }else {
+      Serial.println("JSON parsed");
+      
     }
+    //  {"id":206653929,"command":"act_temperature","targetTemperature":"15.5","forced":false}
+    // {"id":1812451076,"command":"act_temperature","targetTemperature":"26.5","forced":false}	
+   
+   
+   
+   if(docInput["command"] == "act_temperature"){
+      int id = docInput["id"];
+      float targetTemperature = docInput["targetTemperature"];
+      bool forced = docInput["forced"];
+      // manager.updateOrAddRoom(RoomData(nullptr, id, nullptr, targetTemperature, nullptr, nullptr));
+      manager.updateOrAddRoom(RoomData("", id, 0, targetTemperature, 0.0, false));
+      manager.setTemperature(id, targetTemperature);
+    }
+// {"rooms":[],"meta":{"pin_0":{"state":"OFF","forced":"false"},"pin_1":{"state":"OFF","forced":"false"},"pin_2":{"state":"OFF","forced":"false"},"pin_3":{"state":"OFF","forced":"false"},"WoodStove":"off","manifoldTemp":0,"netatmoData":""}}
 
-    if (docInput["usegaz"])
-    {
-      String gas = String(docInput["usegaz"]);
-      Serial.println("usegaz - detected");
-      if (gas == "true")
-      {
-        useGaz_ = true;
-      }
-      else
-      {
-        useGaz_ = false;
-      }
-    }
+    //   int id = docInput["id"];
+    //   float targetTemperature = docInput["targetTemperature"];
+    //   bool forced = docInput["forced"];
+    //   manager.updateOrAddRoom(RoomData(NULL, id, NULL, targetTemperature, NULL, NULL));
+      
+
+    // }
+
+    // if (docInput["usegaz"])
+    // {
+    //   String gas = String(docInput["usegaz"]);
+    //   Serial.println("usegaz - detected");
+    //   if (gas == "true")
+    //   {
+    //     useGaz_ = true;
+    //   }
+    //   else
+    //   {
+    //     useGaz_ = false;
+    //   }
+    // }
 
     // extract the pin number and state from the JSON message
-    pin = String(docInput["pin"]);
-    forced = String(docInput["forced"]);
-    state = String(docInput["state"]);
+    // pin = String(docInput["pin"]);
+    // forced = String(docInput["forced"]);
+    // state = String(docInput["state"]);
 
-    if (forced == "true")
-    {
-      doc[pin]["state"] = "ON";
-      doc[pin]["forced"] = "true";
-    }
-    else
-    {
+    // if (forced == "true")
+    // {
+    //   docPins[pin]["state"] = "ON";
+    //   docPins[pin]["forced"] = "true";
+    // }
+    // else
+    // {
+    //   docPins[pin]["state"] = "OFF";
+    //   docPins[pin]["forced"] = "false";
+    // }
 
-      doc[pin]["state"] = "OFF";
-      doc[pin]["forced"] = "false";
-    }
-
-    // char data[200];
-    // size_t len = serializeJson(doc, data);
-    // webSocket.sendTXT(len, data);
-    // ExpOutput.digitalWrite(P0, HIGH);
-    // set the state of the input pin on the PCF8574 input expander
+    // Send acknowledgment back to client
+    String ackMessage = "{\"response\":\"acknowledged\"}";
+    webSocket.sendTXT(num, ackMessage);
   }
   break;
   }
 }
 
+
+
+
+// WYSYŁANIE ROOMS PRZEZ WSSOCKET
+void broadcastWebsocket()
+{
+
+    // add docPins to docRooms
+   
+    String data =  manager.getRoomsAsJson();
+    webSocket.broadcastTXT(data);
+}
+
+
+
 void setup()
 {
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   Serial.println();
   Serial.println("Starting up...");
 
   // -- Initializing the configuration.
   iotWebConf.init();
-
+  iotWebConf.setApTimeoutMs(5000);
   // -- Set up required URL handlers on the web server.
   server.on("/", handleRoot);
   server.on("/config", []
@@ -212,7 +268,6 @@ void setup()
   // uruchomienie serwera HTTP
   server.begin();
   Serial.println("HTTP server started");
-
   // przygotowanie zmienych do odbioru z webpage
   prepareDataForWebServer();
 
@@ -252,24 +307,41 @@ void setup()
 
   otaStart();
   initInputExpander();
-  // timers.attach(0, 1000, functionName);
+
+  // Inicjalizacja ESP-NOW
+  if (esp_now_init() != ERR_OK)
+  {
+    Serial.println("Błąd inicjalizacji ESP-NOW");
+    return;
+  }
+  esp_now_register_recv_cb(onDataRecv);
+
+  // Inicjalizacja timera
+  timers.attach(0, 35000, fetchNetatmo);
+  timers.attach(1, 12000, broadcastWebsocket); 
+
 }
 
-void loop()
+
+
+
+void manifoldLogic()
 {
+
   bool anyForcedON = 0;
   bool anyInputON = 0;
+  docPins["manifoldTemp"] = manifoldTemp;
   unsigned long currentMillis = millis(); // Get the current time
 
   delay(400);
 
-  // Upfdate JSON doc from six states on first expander
+  // Update JSON doc from six states on first expander
 
   for (int i = 0; i < 6; i++)
   {
     String curr_pin = String(ExpInput.digitalRead(i));
 
-    if (doc["pin_" + String(i)]["forced"] == "true")
+    if (docPins["pin_" + String(i)]["forced"] == "true")
     {
       anyForcedON = 1;
     }
@@ -277,27 +349,26 @@ void loop()
 
   // check woodStove init input
 
-  Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
+  // Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
   if (String(ExpInput.digitalRead(P6)) == "true")
   {
 
-    Serial.println("WoodStove operating ");
-    doc["WoodStove"] = "on";
-  }  
+    // Serial.println("WoodStove operating ");
+    docPins["WoodStove"] = "on";
+  }
   if (String(ExpInput.digitalRead(P6)) == "false")
   {
 
-    Serial.println("WoodStove off ");
-    doc["WoodStove"] = "off";
+    // Serial.println("WoodStove off ");
+    docPins["WoodStove"] = "off";
   }
- 
 
   if (anyForcedON == 1)
   {
     for (int i = 0; i < 6; i++)
     {
 
-      if (doc["pin_" + String(i)]["forced"] == "true")
+      if (docPins["pin_" + String(i)]["forced"] == "true")
       {
         ExpOutput.digitalWrite(i, HIGH);
       }
@@ -315,37 +386,23 @@ void loop()
 
   if (anyForcedON == 0)
   {
-    Serial.println("Pump OFF");
+    // Serial.println("Pump OFF");
     //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
     ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
     //   doc["piec_pompa"] = "OFF";
     //   doc["led"] = "OFF";
 
-    Serial.println("All valves OFF");
+    // Serial.println("All valves OFF");
     for (int i = 0; i < 6; i++)
     {
 
       ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
     }
   }
+}
 
-  // WYSYŁANIE JSON PRZEZ WSSOCKET
-  // czy upłynęło co najmniej 20 sekund od ostatniego wysłania
-
-  if (millis() - lastSendTime > 9000)
-  {
-    String outputJSON;
-    serializeJson(doc, outputJSON);
-    serializeJsonPretty(doc, Serial);
-
-    // wysyłanie info do klientów
-    webSocket.broadcastTXT(outputJSON);
-    lastSendTime = millis();
-
-    Serial.println(String(anyInputON) + ": anyInputON");
-    Serial.println(String(anyForcedON) + ": anyForcedON");
-  }
-
+void loop()
+{
   // Sprawdzenie, czy upłynęło 20 minut od ostatniego restartu
   // if (currentMillis - previousMillis >= interval) {
   //   ESP.restart();  // Restart the NodeMCU
@@ -353,7 +410,16 @@ void loop()
   // }
 
   iotWebConf.doLoop();
-  // timers.process();
-  webSocket.loop();
-  ArduinoOTA.handle();
+
+  // jeśli nawiązano połączenie z siecią
+  if (iotWebConf.getState() == 4)
+  {
+    
+    webSocket.loop();
+    ArduinoOTA.handle();
+    
+    manifoldLogic();
+
+    timers.process();
+  }
 }

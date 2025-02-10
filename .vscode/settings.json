@@ -1,5 +1,7 @@
 {
     "files.associations": {
+        "**/frontmatter.json": "jsonc",
+        "**/.frontmatter/config/*.json": "jsonc",
         "array": "cpp",
         "string": "cpp",
         "string_view": "cpp",
@@ -53,6 +55,7 @@
         "streambuf": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "sstream": "cpp"
     }
 }
