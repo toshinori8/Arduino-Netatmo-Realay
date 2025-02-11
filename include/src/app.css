@@ -35,6 +35,31 @@ body {
 }
 
 
+/* no select class */
+
+.no-select {
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+    -khtml-user-select: none; /* Konqueror HTML */
+    -moz-user-select: none; /* Old versions of Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none; /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
+  }
+
+  /* no select class */
+
+
+
+@keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+
 .container .imageBack_container {
     position: fixed;
     z-index: 0;
@@ -107,6 +132,7 @@ body::before {
 .thermostat-card {
     margin-top: 20px;
     transition: transform all 0.5s ease;
+    animation: fadeIn 1s;
 }
 
 .thermostat-card.expanded {

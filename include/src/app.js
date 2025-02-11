@@ -205,7 +205,77 @@ function connectWebSocket() {
 }
 
 // Nawiązanie połączenia WebSocket przy całkowitym załadowaniu strony
-window.addEventListener('DOMContentLoaded', () => {
+
+
+
+document.addEventListener("DOMContentLoaded", function () {
+    
     connectWebSocket();
     console.log('DOM fully loaded and parsed');
-});
+    
+    
+    const configButton = document.querySelector(".noselect");
+    const wifiConfigButton = document.querySelector("#wifiConfig");
+    const modal = document.getElementById("configModal");
+    const span = document.getElementsByClassName("close")[0];
+    const saveButton = document.getElementById("saveConfig");
+    const roomList = document.getElementById("roomList");
+
+
+
+  /*   socket.onmessage = function (event) {
+      const data = JSON.parse(event.data);
+      if (data.rooms) {
+        roomList.innerHTML = "";
+        data.rooms.forEach((room) => {
+          const roomItem = document.createElement("div");
+          roomItem.innerHTML = `
+            <label>${room.name}</label>
+            <select data-room-id="${room.id}">
+              <option value="1">Pin 1</option>
+              <option value="2">Pin 2</option>
+              <option value="3">Pin 3</option>
+              <option value="4">Pin 4</option>
+            </select>
+          `;
+          roomList.appendChild(roomItem);
+        });
+      }
+    }; */
+
+    configButton.onclick = function () {
+      modal.style.display = "block";
+    //   socket.send(JSON.stringify({ command: "getRooms" }));
+    };
+    wifiConfigButton.onclick = function () {
+        modal.style.display = "block";
+        document.location.href = "/config";
+
+      };
+
+    span.onclick = function () {
+      modal.style.display = "none";
+    };
+
+    window.onclick = function (event) {
+      if (event.target == modal) {
+        modal.style.display = "none";
+      }
+    };
+
+    saveButton.onclick = function () {
+      const roomConfigs = [];
+      const selects = roomList.querySelectorAll("select");
+      selects.forEach((select) => {
+        roomConfigs.push({
+          id: select.getAttribute("data-room-id"),
+          pinNumber: select.value,
+        });
+      });
+      socket.send(JSON.stringify({ command: "updatePins", rooms: roomConfigs }));
+      modal.style.display = "none";
+    };
+
+
+    
+  });

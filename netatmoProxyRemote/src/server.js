@@ -16,6 +16,7 @@ const {
   filterHomestatusData,
   filterHomesdata,
   combineRoomData,
+  extractBatteryState,
 } = require("./getData");
 
 let data = qs.stringify({});
@@ -52,7 +53,7 @@ app.get("/getdata", async (req, res) => {
     let outDATA = {};
     let response1 = {};
     let response2 = {};
-    let chk = 0;
+    
 
     axios
       .request(xhrconfig)
@@ -66,11 +67,18 @@ app.get("/getdata", async (req, res) => {
         let filteredResponse2 = filterHomesdata(response2);
         outDATA = {
           rooms: combineRoomData(filteredResponse1, filteredResponse2),
-          // meta: {
-          //   homestatus: response1,
-          //   homesdata: response2,
-          // },
+          meta: {
+            homestatus: response1,
+             homesdata: response2,
+           }
         };
+
+        outDATA = extractBatteryState(outDATA);
+
+        // delete meta in data\
+        delete outDATA.meta;
+         
+
         res.json(outDATA);
       })
       .catch((error) => {
@@ -108,7 +116,7 @@ app.listen(PORT, () => {
 // set function  set temperature and mode
 app.get("/setRoomTemperature", async (req, res) => {
 
-console.log("setRoomTemperature")
+
   try {
     const tokens = await loadTokens();
     let { access_token, refresh_token } = tokens;
