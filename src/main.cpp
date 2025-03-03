@@ -18,7 +18,7 @@ StaticJsonDocument<1124> docRooms;
 #include <roomManager.h>
 
 bool useGaz_ = true; // use gas? button on webPage
-const char thingName[] = "netatmo_relay";
+const char thingName[] = "netatmo_relay1";
 const char wifiInitialApPassword[] = "12345678";
 void handleRoot();
 
@@ -35,27 +35,27 @@ DNSServer dnsServer;
 WebServer server(80);
 IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
 
-
 RoomManager manager;
-
 
 void prepareDataForWebServer()
 {
 
-  docPins["pin_0"]["state"] = "OFF";
-  docPins["pin_0"]["forced"] = "false";
+  docPins["pins"]["pin_0"]["state"] = "OFF";
+  docPins["pins"]["pin_0"]["forced"] = "false";
 
-  docPins["pin_1"]["state"] = "OFF";
-  docPins["pin_1"]["forced"] = "false";
+  docPins["pins"]["pin_1"]["state"] = "OFF";
+  docPins["pins"]["pin_1"]["forced"] = "false";
 
-  docPins["pin_2"]["state"] = "OFF";
-  docPins["pin_2"]["forced"] = "false";
+  docPins["pins"]["pin_2"]["state"] = "OFF";
+  docPins["pins"]["pin_2"]["forced"] = "false";
 
-  docPins["pin_3"]["state"] = "OFF";
-  docPins["pin_3"]["forced"] = "false";
+  docPins["pins"]["pin_3"]["state"] = "OFF";
+  docPins["pins"]["pin_3"]["forced"] = "false";
+
   docPins["WoodStove"] = "off";
   docPins["manifoldTemp"] = "";
   docPins["netatmoData"] = "";
+  docPins["usegaz"] = "false";
 }
 
 void handleRoot()
@@ -67,12 +67,10 @@ void handleRoot()
   server.send(200, "text/html", webpage);
 }
 
-
-
-void fetchNetatmo() {
-      manager.fetchJsonData(api_url);
+void fetchNetatmo()
+{
+  manager.fetchJsonData(api_url);
 }
-
 
 // utworzenie obiektu klasy Timers z trzema odliczającymi
 Timers<3> timers;
@@ -82,7 +80,6 @@ PCF8574 ExpInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
 PCF8574 ExpOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
 
 void otaStart();
-
 void initInputExpander()
 {
   // ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
@@ -107,7 +104,6 @@ void initInputExpander()
   ExpInput.digitalWrite(P6, HIGH);
   ExpInput.digitalWrite(P7, HIGH);
 };
-
 void initOutputExpander()
 {
   for (int i = 0; i < 7; i++)
@@ -117,7 +113,6 @@ void initOutputExpander()
     ExpOutput.digitalWrite(i, HIGH);
   }
 };
-
 void blinkOutput(int timer)
 {
   for (int i = 0; i < 7; i++)
@@ -135,7 +130,7 @@ void useGaz(void)
   docPins["piec_pompa"] = "ON";
   docPins["led"] = "ON";
 }
-// Obsługa eventow Websocket
+// Obsługa Websocket
 void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
   switch (type)
@@ -165,62 +160,131 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     {
       Serial.println("Error parsing JSON");
       return;
-    }else {
+    }
+    else
+    {
       Serial.println("JSON parsed");
-      
     }
     //  {"id":206653929,"command":"act_temperature","targetTemperature":"15.5","forced":false}
-    // {"id":1812451076,"command":"act_temperature","targetTemperature":"26.5","forced":false}	
-   
-   
-   
-   if(docInput["command"] == "act_temperature"){
+    // {"id":1812451076,"command":"act_temperature","targetTemperature":"26.5","forced":false}
+
+  Serial.println(messageText);
+//{"command":"usegaz","value":"true"}
+    if (docInput["command"] == "usegaz")
+    {
+      Serial.println("usegaz - detected : " + String(docInput["usegaz"].as<const char*>()));
+      Serial.println(docInput["usegaz"].as<const char*>());
+
+      if (docInput["command"] == "usegaz" && docInput["value"] == "true")  
+      {
+        useGaz_ = true;
+        docPins["usegaz"] = "true";
+      }
+      else
+      {
+        useGaz_ = false;
+        docPins["usegaz"] = "false";
+      }
+    }
+
+    if (docInput["command"] == "act_temperature")
+    {
       int id = docInput["id"];
       float targetTemperature = docInput["targetTemperature"];
       bool forced = docInput["forced"];
+
       // manager.updateOrAddRoom(RoomData(nullptr, id, nullptr, targetTemperature, nullptr, nullptr));
-      manager.updateOrAddRoom(RoomData("", id, 0, targetTemperature, 0.0, false));
-      manager.setTemperature(id, targetTemperature);
+
+      // RoomData() : name(""), ID(-1), pinNumber(0), targetTemperature(0.0), currentTemperature(0.0), forced(false), battery_state(""), battery_level(0), rf_strength(0), reachable(false), anticipating("") {}
+      //
+
+      manager.updateOrAddRoom(RoomData("", id, 0, targetTemperature, 0.0, false, "", 0, 0, false, ""));
+
+      if (docInput["usegaz"] == "false")
+      {
+        manager.setTemperature(id, targetTemperature);
+      }
     }
-// {"rooms":[],"meta":{"pin_0":{"state":"OFF","forced":"false"},"pin_1":{"state":"OFF","forced":"false"},"pin_2":{"state":"OFF","forced":"false"},"pin_3":{"state":"OFF","forced":"false"},"WoodStove":"off","manifoldTemp":0,"netatmoData":""}}
+    // {"rooms":[],"meta":{"pin_0":{"state":"OFF","forced":"false"},"pin_1":{"state":"OFF","forced":"false"},"pin_2":{"state":"OFF","forced":"false"},"pin_3":{"state":"OFF","forced":"false"},"WoodStove":"off","manifoldTemp":0,"netatmoData":""}}
 
-    //   int id = docInput["id"];
-    //   float targetTemperature = docInput["targetTemperature"];
-    //   bool forced = docInput["forced"];
-    //   manager.updateOrAddRoom(RoomData(NULL, id, NULL, targetTemperature, NULL, NULL));
+
+
+    // }
+    if (docInput["command"]=="forced"){
+
+      int id = docInput["id"];
       
+      // Znajdz Room ktorego ID == id 
+      RoomData room = manager.getRoomByID(id);
+      // get pinNumber from room 
+      int pinNumber = room.pinNumber;
+      String pin = "pin_" + String(pinNumber);
 
-    // }
+      float targetTemperature = docInput["targetTemperature"];
+      bool forced = docInput["forced"];
+     
+      // if (forced ==0){forced="false";}else(forced="true");
+      room.forced = forced;
+      Serial.println("Forced in room.forced");
+      Serial.println(room.forced);
 
-    // if (docInput["usegaz"])
-    // {
-    //   String gas = String(docInput["usegaz"]);
-    //   Serial.println("usegaz - detected");
-    //   if (gas == "true")
-    //   {
-    //     useGaz_ = true;
-    //   }
-    //   else
-    //   {
-    //     useGaz_ = false;
-    //   }
-    // }
+
+
+      // room.forced =forced;
+
+      Serial.println(forced);
+      manager.updateOrAddRoom(RoomData("", id, 0, targetTemperature, 0.0, forced, "", 0, 0, false, ""));
+
+
+    if (forced)
+    {
+      docPins["pins"][pin]["state"] = "ON";
+      docPins["pins"][pin]["forced"] = "true";
+    }
+    else
+    {
+      docPins["pins"][pin]["state"] = "OFF";
+      docPins["pins"][pin]["forced"] = "false";
+    } 
+
+
+
+
+
+    }
+ 
 
     // extract the pin number and state from the JSON message
-    // pin = String(docInput["pin"]);
-    // forced = String(docInput["forced"]);
-    // state = String(docInput["state"]);
+   /*  pin = String(docInput["pin"]);
+    forced = String(docInput["forced"]);
+    state = String(docInput["state"]);
 
-    // if (forced == "true")
-    // {
-    //   docPins[pin]["state"] = "ON";
-    //   docPins[pin]["forced"] = "true";
-    // }
-    // else
-    // {
-    //   docPins[pin]["state"] = "OFF";
-    //   docPins[pin]["forced"] = "false";
-    // }
+    if (forced == "true")
+    {
+      docPins["pins"][pin]["state"] = "ON";
+      docPins["pins"][pin]["forced"] = "true";
+    }
+    else
+    {
+      docPins["pins"][pin]["state"] = "OFF";
+      docPins["pins"][pin]["forced"] = "false";
+    } */
+
+    // Dodaj obsługę nowych komend
+    if (docInput["command"] == "getPinMappings") {
+        String mappings = manager.getPinMappingAsJson();
+        webSocket.sendTXT(num, mappings);
+    }
+    else if (docInput["command"] == "updatePin") {
+        int roomId = docInput["roomId"];
+        int newPin = docInput["pin"];
+        manager.updatePinMapping(roomId, newPin);
+        
+        // Potwierdź aktualizację
+        String response = "{\"response\":\"pinUpdated\",\"roomId\":" + String(roomId) + 
+                        ",\"pin\":" + String(newPin) + "}";
+        webSocket.sendTXT(num, response);
+    }
 
     // Send acknowledgment back to client
     String ackMessage = "{\"response\":\"acknowledged\"}";
@@ -230,20 +294,15 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   }
 }
 
-
-
-
 // WYSYŁANIE ROOMS PRZEZ WSSOCKET
 void broadcastWebsocket()
 {
 
-    // add docPins to docRooms
-   
-    String data =  manager.getRoomsAsJson();
-    webSocket.broadcastTXT(data);
+  // add docPins to docRooms
+
+  String data = manager.getRoomsAsJson();
+  webSocket.broadcastTXT(data);
 }
-
-
 
 void setup()
 {
@@ -318,12 +377,8 @@ void setup()
 
   // Inicjalizacja timera
   timers.attach(0, 35000, fetchNetatmo);
-  timers.attach(1, 12000, broadcastWebsocket); 
-
+  timers.attach(1, 12000, broadcastWebsocket);
 }
-
-
-
 
 void manifoldLogic()
 {
@@ -341,7 +396,7 @@ void manifoldLogic()
   {
     String curr_pin = String(ExpInput.digitalRead(i));
 
-    if (docPins["pin_" + String(i)]["forced"] == "true")
+    if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
     {
       anyForcedON = 1;
     }
@@ -368,7 +423,7 @@ void manifoldLogic()
     for (int i = 0; i < 6; i++)
     {
 
-      if (docPins["pin_" + String(i)]["forced"] == "true")
+      if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
       {
         ExpOutput.digitalWrite(i, HIGH);
       }
@@ -414,10 +469,10 @@ void loop()
   // jeśli nawiązano połączenie z siecią
   if (iotWebConf.getState() == 4)
   {
-    
+
     webSocket.loop();
     ArduinoOTA.handle();
-    
+
     manifoldLogic();
 
     timers.process();

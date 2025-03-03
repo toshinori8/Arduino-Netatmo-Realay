@@ -52,7 +52,70 @@ function extractBatteryState(data) {
         // room.bridge = modules[module_id].bridge;
         // room.boiler_status = modules[module_id].boiler_status;
 
-        console.log(modules[module_id]);
+        /* console.log(modules[module_id]); */
+
+
+        // room: 
+        // {
+        //   id: '1812451076',
+        //   name: 'Łazienka',
+        //   type: 'bathroom',
+        //   module_ids: [ '70:ee:50:0b:df:dc', '04:00:00:0b:df:42' ],
+        //   battery_state: 'full',
+        //   battery_level: 4165,
+        //   firmware_revision: 79,
+        //   rf_strength: 71,
+        //   reachable: true
+        // }
+        // modules[module_id]: 
+        // {
+        //   id: '04:00:00:0b:df:42',
+        //   type: 'NATherm1',
+        //   battery_state: 'full',
+        //   battery_level: 4165,
+        //   firmware_revision: 79,
+        //   rf_strength: 71,
+        //   reachable: true,
+        //   boiler_valve_comfort_boost: false,
+        //   bridge: '70:ee:50:0b:df:dc',
+        //   boiler_status: true
+        // }
+
+    /*    console.log("room: ");
+       console.log(room);
+       console.log("modules[module_id]: ");
+       console.log(modules[module_id]); */
+
+
+       // sprawdz czy w room[module_ids] ktoras wartosc jest rowna modules[module_id].id
+        // jesli tak to dodaj do room wartosci z modules[module_id] 
+
+        if(room.module_ids.includes(modules[module_id].id)) {
+          // console.log("jest");
+
+
+          room.battery_state = modules[module_id].battery_state;
+          room.battery_level = modules[module_id].battery_level;
+          room.rf_strength = modules[module_id].rf_strength;
+          room.reachable = modules[module_id].reachable;
+          
+          data.rooms.forEach((roomO) => {
+           
+            if(roomO.id === room.id) {
+              roomO.battery_state = modules[module_id].battery_state;
+              roomO.battery_level = modules[module_id].battery_level;
+              roomO.rf_strength = modules[module_id].rf_strength;
+              roomO.reachable = modules[module_id].reachable;
+            }
+
+          }
+
+        )
+
+
+        }
+     
+      
       }
 
 
@@ -176,7 +239,7 @@ function extractBatteryState(data) {
   //   // Add the battery state to the room
   //   room.battery_state = battery_state;
   // });
-
+// console.log(data);
   return data;
 }
 
@@ -190,7 +253,7 @@ function filterHomestatusData(data) {
     id: room.id || null,
     reachable: room.reachable || null,
     anticipating: room.anticipating || null,
-    heating_power_request: room.heating_power_request || null,
+    // heating_power_request: room.heating_power_request || null,
     open_window: room.open_window || null,
     therm_measured_temperature: room.therm_measured_temperature || null,
     therm_setpoint_temperature: room.therm_setpoint_temperature || null,

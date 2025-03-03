@@ -12,6 +12,23 @@
 
 }
 
+/* 
+.modal-content {
+  background-color: #fefefe;
+  margin: 15% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%;
+  max-width: 500px;
+} */
+
+#roomList div {
+  margin: 10px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .modal-content {
     -webkit-box-shadow: 0px 0px 73px 15px rgba(66, 68, 90, 0.44);
     -moz-box-shadow: 0px 0px 73px 15px rgba(66, 68, 90, 0.44);
@@ -29,14 +46,7 @@
 
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
+
 .close {
   color: #aaa;
   float: right;
@@ -76,6 +86,7 @@ button.confirm {
   width: 100%;
   border-radius: 12px;
   width: 25%;
+  float: right;
 }
 button {
   background-color: #445A7D;

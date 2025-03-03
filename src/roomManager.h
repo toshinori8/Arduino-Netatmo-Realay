@@ -21,17 +21,43 @@ std::map<int, int> idToPinMap = {
 
 struct RoomData
 {
+   
+  /*  {
+      id: '38038562',
+      reachable: true,
+      anticipating: null,
+
+      therm_measured_temperature: 10.8,
+      therm_setpoint_temperature: 28,
+      therm_setpoint_mode: 'manual',
+      name: 'Waleria',
+      type: 'custom',
+      battery_state: 'high',
+      battery_level: 3782,
+      rf_strength: 40
+    }
+   
+ */
+
     std::string name;         // Nazwa pokoju
     int ID;                   // ID pokoju
     int pinNumber;            // Numer przyporzadkowanego pinu
     float targetTemperature;  // Temperatura zadana
     float currentTemperature; // Temperatura aktualna
     bool forced;              // Czy jest to tryb wymuszony
+    String battery_state;     // Stan baterii
+    int battery_level;        // Poziom baterii
+    int rf_strength;          // Siła sygnału
+    String type;              // Typ pokoju
+    bool reachable;           // Czy pokój jest osiągalny
+    String anticipating;      // Czy pokój jest w trybie oczekiwania
 
-    RoomData() : name(""), ID(-1), pinNumber(0), targetTemperature(0.0), currentTemperature(0.0), forced(false) {}
 
-    RoomData(const std::string& name, int ID, int pinNumber, float targetTemperature, float currentTemperature, bool forced)
-        : name(name), ID(ID), pinNumber(pinNumber), targetTemperature(targetTemperature), currentTemperature(currentTemperature), forced(forced) {}
+
+    RoomData() : name(""), ID(-1), pinNumber(0), targetTemperature(0.0), currentTemperature(0.0), forced(false), battery_state(""), battery_level(0), rf_strength(0), reachable(false), anticipating("") {}
+
+    RoomData(const std::string& name, int ID, int pinNumber, float targetTemperature, float currentTemperature, bool forced, const String& battery_state, int battery_level, int rf_strength, bool reachable, const String& anticipating)
+        : name(name), ID(ID), pinNumber(pinNumber), targetTemperature(targetTemperature), currentTemperature(currentTemperature), forced(forced), battery_state(battery_state), battery_level(battery_level), rf_strength(rf_strength), reachable(reachable), anticipating(anticipating) {}
 };
 
 class RoomManager
@@ -68,16 +94,35 @@ public:
 
     void updateRoomParams(RoomData &existingRoom, const RoomData &newRoom)
     {
+
+
+
+        if(docPins["usegaz"] == "true")
+        {
+            if (newRoom.targetTemperature != 0.0)
+            existingRoom.targetTemperature = newRoom.targetTemperature;
+        }
+
+
         if (!newRoom.name.empty())
             existingRoom.name = newRoom.name;
         if (newRoom.ID != -1)
             existingRoom.ID = newRoom.ID;
         if (newRoom.pinNumber != 0)
             existingRoom.pinNumber = newRoom.pinNumber;
-        if (newRoom.targetTemperature != 0.0)
-            existingRoom.targetTemperature = newRoom.targetTemperature;
+        
         if (newRoom.currentTemperature != 0.0)
             existingRoom.currentTemperature = newRoom.currentTemperature;
+        if(newRoom.battery_state != "")
+            existingRoom.battery_state = newRoom.battery_state;
+        if(newRoom.battery_level != 0)
+            existingRoom.battery_level = newRoom.battery_level;
+        if(newRoom.rf_strength != 0)
+            existingRoom.rf_strength = newRoom.rf_strength;
+        if(newRoom.reachable != false)
+            existingRoom.reachable = newRoom.reachable;
+        if(newRoom.anticipating != "")
+            existingRoom.anticipating = newRoom.anticipating;
         existingRoom.forced = newRoom.forced;
     }
 
@@ -92,6 +137,20 @@ public:
             Serial.println("Index out of range");
             return RoomData(); // Zwraca pusty RoomData w przypadku błędu
         }
+    }
+
+// get room by ID 
+    RoomData getRoomByID(int roomID)
+    {
+        for (const auto &room : rooms)
+        {
+            if (room.ID == roomID)
+            {
+                return room;
+            }
+        }
+        Serial.println("Room ID not found");
+        return RoomData(); // Zwraca pusty RoomData w przypadku błędu
     }
 
     void updateRoom(size_t index, const RoomData &room)
@@ -130,6 +189,12 @@ public:
             roomObject["targetTemperature"] = room.targetTemperature;
             roomObject["currentTemperature"] = room.currentTemperature;
             roomObject["forced"] = room.forced;
+            roomObject["battery_state"] = room.battery_state;
+            roomObject["battery_level"] = room.battery_level;
+            roomObject["rf_strength"] = room.rf_strength;
+            roomObject["reachable"] = room.reachable;
+            roomObject["anticipating"] = room.anticipating;
+            
         }
          
          // Kopiowanie docPins do meta w docx
@@ -206,7 +271,20 @@ public:
                 {
                     DynamicJsonDocument doc(2048);
                     deserializeJson(doc, payload);
-
+//  {
+//       "id": "1812451076",
+//       "reachable": true,
+//       "anticipating": null,
+//       "open_window": null,
+//       "therm_measured_temperature": 15.4,
+//       "therm_setpoint_temperature": 12.5,
+//       "therm_setpoint_mode": "away",
+//       "name": "Łazienka",
+//       "type": "bathroom",
+//       "battery_state": "full",
+//       "battery_level": 4160,
+//       "rf_strength": 71
+//     },
                     JsonArray rooms = doc["rooms"];
                     for (JsonObject room : rooms)
                     {
@@ -216,10 +294,19 @@ public:
                         float targetTemperature = room["therm_setpoint_temperature"].as<float>();
                         bool forced = strcmp(room["therm_setpoint_mode"], "away") == 0;
 
+                        String battery_state = room["battery_state"].as<const char *>();
+                        int battery_level = room["battery_level"].as<int>();
+                        int rf_strength = room["rf_strength"].as<int>();
+                        String type = room["type"].as<const char *>();
+                        bool reachable = room["reachable"].as<bool>();
+                        String anticipating = room["anticipating"].as<const char *>();
+
+
+
                         // Sprawdź przypisany pin na podstawie ID
                         int pinNumber = idToPinMap[id];
 
-                        updateOrAddRoom(RoomData(name, id, pinNumber, targetTemperature, currentTemperature, forced));
+                        updateOrAddRoom(RoomData(name, id, pinNumber, targetTemperature, currentTemperature, forced, battery_state, battery_level, rf_strength, reachable, anticipating));
                     }
                 }
                 else
@@ -239,6 +326,36 @@ public:
         }
 
         setRequestInProgress(false);
+    }
+
+    std::map<int, int> idToPinMap; // Przenieś mapowanie tutaj
+
+    void updatePinMapping(int roomId, int newPin) {
+        idToPinMap[roomId] = newPin;
+        // Zaktualizuj też pin w odpowiednim pokoju
+        for (auto &room : rooms) {
+            if (room.ID == roomId) {
+                room.pinNumber = newPin;
+                break;
+            }
+        }
+    }
+
+    // Dodaj metodę do serializacji mapowania pinów
+    String getPinMappingAsJson() {
+        DynamicJsonDocument doc(1024);
+        JsonArray mappings = doc.createNestedArray("pinMappings");
+        
+        for (const auto &room : rooms) {
+            JsonObject mapping = mappings.createNestedObject();
+            mapping["roomId"] = room.ID;
+            mapping["name"] = room.name;
+            mapping["pin"] = room.pinNumber;
+        }
+        
+        String jsonString;
+        serializeJson(doc, jsonString);
+        return jsonString;
     }
 
 private:
