@@ -1,3 +1,19 @@
+function showAlert(message, type = 'info') {
+  const alertDiv = document.createElement('div');
+  alertDiv.className = `p-4 mb-4 rounded-lg ${type === 'error' ? 'bg-red-500' : 'bg-blue-500'} text-white`;
+  alertDiv.style.position = 'fixed';
+  alertDiv.style.top = '20px';
+  alertDiv.style.right = '20px';
+  alertDiv.style.zIndex = '9999';
+  alertDiv.textContent = message;
+  
+  document.body.appendChild(alertDiv);
+  
+  // Usuń alert po 5 sekundach
+  setTimeout(() => {
+    alertDiv.remove();
+  }, 5000);
+}
 
 let dataIncoming = false;
 let usegaz = document.querySelector(".usegaz");
@@ -190,6 +206,87 @@ socket.onclose = function (e) {
   setTimeout(function () {
     connect();
   }, 15000);
+};
+
+socket.onmessage = function(e) {
+  console.log('Server: ', e.data);
+  var data = JSON.parse(e.data);
+  
+  // Obsługa informacji o restarcie
+  if (data.type === 'reset_info') {
+    const resetReason = data.reason;
+    const heap = data.heap;
+    showAlert(`Urządzenie zostało zrestartowane. Powód: ${resetReason}, Pamięć: ${heap} bajtów`);
+  }
+  
+  // Istniejąca obsługa innych wiadomości
+  if (data.response === "connected") {
+    messageElements.textContent = "WS Connected";
+    dataIncoming = true;
+  }
+
+  if (dataIncoming) {
+
+    console.log(data)
+    for (const key in data) {
+      // Pobranie elementu HTML o identyfikatorze równym nazwie właściwości (np. "pin_4")
+
+      // if (key == "piec_pompa") {
+      //   const iconHeat = document.querySelector(".iconHeat");
+
+      //   if (data[key] == "ON") {
+      //     iconHeat.classList.add("active");
+      //   } else {
+      //     iconHeat.classList.remove("active");
+      //   }
+      // }
+
+      if (key.includes("pin_")) {
+
+        let element = document.getElementById(key);
+        // Jeśli element istnieje i jest elementem "input type="checkbox""
+        if (element && element.type === "checkbox") {
+          // Ustawienie atrybutu "checked" elementu za pomocą wartości właściwości (np. "ON" lub "OFF")
+          element.checked = data[key]["state"] === "ON";
+        }
+        const handIcon_ = document.getElementById(key).parentElement.querySelector(".handIcon");
+        // Jeśli element istnieje i jest elementem "input type="checkbox""
+        if (element && element.type === "checkbox") {
+          // Ustawienie atrybutu "checked" elementu za pomocą wartości właściwości (np. "ON" lub "OFF")
+          element.checked = data[key]["state"] === "ON";
+          if (data[key]["forced"] === "true") {
+            handIcon_.classList.remove("disabled");
+          } else (handIcon_.classList.add("disabled"))
+        }
+      }
+
+
+
+
+
+      const checkboxes = document.querySelectorAll(
+        '.checkbox-container input[type="checkbox"]'
+      );
+
+      for (let i = 0; i < checkboxes.length; i++) {
+        let checked = false;
+        for (let j = 0; j < checkboxes.length; j++) {
+          if (checkboxes[j].checked) {
+            checked = true;
+            break;
+          }
+        }
+
+        document.body.classList.toggle("orange", checked);
+      }
+    }
+
+
+
+  }
+
+
+
 };
 
 
