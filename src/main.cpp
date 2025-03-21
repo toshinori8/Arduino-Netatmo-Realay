@@ -312,7 +312,7 @@ void setup()
   Serial.println("Initializing IotWebConf...");
   iotWebConf.init();
   
-  // Sprawdź czy mamy zapisaną konfigurację
+ /*  // Sprawdź czy mamy zapisaną konfigurację
   if (iotWebConf.getState() == IOTWEBCONF_STATE_BOOT)
   {
     Serial.println("No saved config, starting AP mode");
@@ -324,7 +324,7 @@ void setup()
   else
   {
     Serial.println("Trying to connect to configured network...");
-  }
+  } */
 
   // -- Set up required URL handlers on the web server.
   server.on("/", handleRoot);
@@ -413,7 +413,7 @@ void loop()
     buttonDownTime = 0; // Reset licznika gdy przycisk puszczony
   }
 
-  if (iotWebConf.getState() == IOTWEBCONF_STATE_ONLINE)
+  if (iotWebConf.getState() == 4)
   {
     if(ESP.getFreeHeap() < 4096) { // Ostrzeżenie przy małej ilości pamięci
       Serial.println("Low memory: " + String(ESP.getFreeHeap()));
