@@ -13,8 +13,8 @@
 #include <EEPROM.h>
 #include <Esp.h>
 
-const int NUM_RELAYS = 6;  // liczba przekaźników
-const int relayPins[NUM_RELAYS] = {0, 1, 2, 3, 4, 5};  // piny przekaźników na ekspanderze
+const int NUM_RELAYS = 6;                             // liczba przekaźników
+const int relayPins[NUM_RELAYS] = {0, 1, 2, 3, 4, 5}; // piny przekaźników na ekspanderze
 
 unsigned long lastSendTime = 0;
 unsigned long previousMillis = 0;      // Variable to store the previous time
@@ -39,7 +39,8 @@ String state;
 String pin;
 
 // Struktura do przechowywania stanu przekaźnika
-struct RelayState {
+struct RelayState
+{
   bool isOn;
   bool isAuto;
   String linkedSensor;
@@ -54,9 +55,9 @@ const unsigned long SAVE_INTERVAL = 600000; // 10 minut w milisekundach
 rst_info *myResetInfo;
 
 // Dodaj na początku pliku po innych stałych
-const int CONFIG_PIN = 0;  // GPIO0 - przycisk FLASH na ESP8266
+const int CONFIG_PIN = 0; // GPIO0 - przycisk FLASH na ESP8266
 unsigned long buttonDownTime = 0;
-const int CONFIG_RESET_TIMEOUT = 3000; // 3 sekundy przytrzymania przycisku
+const int CONFIG_RESET_TIMEOUT = 10000; // 10 sekund przytrzymania przycisku
 
 const int WATCHDOG_TIMEOUT = 8; // sekundy na watchdog timer
 
@@ -217,41 +218,47 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   }
 }
 
-void saveState() {
+void saveState()
+{
   EEPROM.begin(512);
   int addr = 0;
-  
-  for(int i = 0; i < NUM_RELAYS; i++) {
+
+  for (int i = 0; i < NUM_RELAYS; i++)
+  {
     EEPROM.write(addr++, relayStates[i].isOn ? 1 : 0);
     EEPROM.write(addr++, relayStates[i].isAuto ? 1 : 0);
     // Zapisz długość nazwy czujnika
     byte sensorNameLength = relayStates[i].linkedSensor.length();
     EEPROM.write(addr++, sensorNameLength);
     // Zapisz nazwę czujnika
-    for(int j = 0; j < sensorNameLength; j++) {
+    for (int j = 0; j < sensorNameLength; j++)
+    {
       EEPROM.write(addr++, relayStates[i].linkedSensor[j]);
     }
   }
-  
+
   EEPROM.commit();
 }
 
-void loadState() {
+void loadState()
+{
   EEPROM.begin(512);
   int addr = 0;
-  
-  for(int i = 0; i < NUM_RELAYS; i++) {
+
+  for (int i = 0; i < NUM_RELAYS; i++)
+  {
     relayStates[i].isOn = EEPROM.read(addr++) == 1;
     relayStates[i].isAuto = EEPROM.read(addr++) == 1;
     // Odczytaj długość nazwy czujnika
     byte sensorNameLength = EEPROM.read(addr++);
     char sensorName[33] = {0}; // Max 32 znaki + null terminator
     // Odczytaj nazwę czujnika
-    for(int j = 0; j < sensorNameLength; j++) {
+    for (int j = 0; j < sensorNameLength; j++)
+    {
       sensorName[j] = EEPROM.read(addr++);
     }
     relayStates[i].linkedSensor = String(sensorName);
-    
+
     // Zastosuj odczytany stan
     digitalWrite(relayPins[i], relayStates[i].isOn ? HIGH : LOW);
   }
@@ -263,13 +270,13 @@ void wifiConnected()
   Serial.println("WiFi connected");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
-  
+
   // Wyślij informację o IP przez WebSocket
   StaticJsonDocument<200> ipDoc;
   ipDoc["type"] = "wifi_info";
   ipDoc["ip"] = WiFi.localIP().toString();
   ipDoc["status"] = "connected";
-  
+
   String ipJSON;
   serializeJson(ipDoc, ipJSON);
   webSocket.broadcastTXT(ipJSON);
@@ -283,48 +290,48 @@ void configSaved()
 void setup()
 {
   Serial.begin(9600);
-  
+
   // Dodaj na początku setup
-  ESP.wdtDisable(); // Wyłącz watchdog na czas setupu
-  ESP.wdtEnable(WATCHDOG_TIMEOUT * 1000); // Włącz watchdog z timeoutem w ms
-  
+  // ESP.wdtDisable(); // Wyłącz watchdog na czas setupu
+  // ESP.wdtEnable(WATCHDOG_TIMEOUT * 1000); // Włącz watchdog z timeoutem w ms
+
   pinMode(CONFIG_PIN, INPUT_PULLUP);
-  
+
   // Debugowanie przyczyny restartu
   myResetInfo = ESP.getResetInfoPtr();
   String resetReason = "Reset reason: " + String(myResetInfo->reason);
-  
+
   // Przygotuj JSON z informacją o restarcie
   StaticJsonDocument<200> resetDoc;
   resetDoc["type"] = "reset_info";
   resetDoc["reason"] = String(myResetInfo->reason);
   resetDoc["heap"] = ESP.getFreeHeap();
-  
+
   // Dodaj callback-i dla IotWebConf
   iotWebConf.setWifiConnectionCallback(&wifiConnected);
   iotWebConf.setConfigSavedCallback(&configSaved);
-  
+
   // Zwiększ timeout na połączenie WiFi
   iotWebConf.setApTimeoutMs(120000); // 2 minuty na konfigurację
-  
+
   // Inicjalizacja z większym debugowaniem
   Serial.println("Starting up...");
   Serial.println("Initializing IotWebConf...");
   iotWebConf.init();
-  
- /*  // Sprawdź czy mamy zapisaną konfigurację
-  if (iotWebConf.getState() == IOTWEBCONF_STATE_BOOT)
-  {
-    Serial.println("No saved config, starting AP mode");
-  }
-  else if (iotWebConf.getState() == IOTWEBCONF_STATE_NOT_CONFIGURED)
-  {
-    Serial.println("Config invalid, starting AP mode");
-  }
-  else
-  {
-    Serial.println("Trying to connect to configured network...");
-  } */
+
+  /*  // Sprawdź czy mamy zapisaną konfigurację
+   if (iotWebConf.getState() == IOTWEBCONF_STATE_BOOT)
+   {
+     Serial.println("No saved config, starting AP mode");
+   }
+   else if (iotWebConf.getState() == IOTWEBCONF_STATE_NOT_CONFIGURED)
+   {
+     Serial.println("Config invalid, starting AP mode");
+   }
+   else
+   {
+     Serial.println("Trying to connect to configured network...");
+   } */
 
   // -- Set up required URL handlers on the web server.
   server.on("/", handleRoot);
@@ -336,20 +343,20 @@ void setup()
   Serial.println("Ready.");
 
   // uruchomienie serwera HTTP
-  server.begin();
-  Serial.println("HTTP server started");
+  // server.begin();
+  // Serial.println("HTTP server started");
 
   // przygotowanie zmienych do odbioru z webpage
   prepareDataForWebServer();
 
   // uruchomienie serwera WebSocket
-  webSocket.begin();
-  webSocket.onEvent(onWsEvent);
-  Serial.println("WebSocket server started");
+  // webSocket.begin();
+  // webSocket.onEvent(onWsEvent);
+  // Serial.println("WebSocket server started");
 
   //  ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
-  initInputExpander();
-  initOutputExpander();
+  // initInputExpander();
+  // initOutputExpander();
 
   // INICJALIZACJA PCF
   Serial.print("Init input Expander...");
@@ -380,32 +387,33 @@ void setup()
   initInputExpander();
   // timers.attach(0, 1000, functionName);
 
-  loadState(); // Dodaj to na końcu setup()
+  // loadState(); // Dodaj to na końcu setup()
 
   // Po inicjalizacji WebSocket wyślij informację
-  String resetJSON;
-  serializeJson(resetDoc, resetJSON);
-  webSocket.broadcastTXT(resetJSON);
+  // String resetJSON;
+  // serializeJson(resetDoc, resetJSON);
+  // webSocket.broadcastTXT(resetJSON);
 }
 
 void loop()
 {
-  // Dodaj na początku loop
-  ESP.wdtFeed(); // Reset watchdog timer
-  
+  // ESP.wdtFeed(); // Reset watchdog timer
+
   // Sprawdź czy przycisk jest wciśnięty (stan niski bo INPUT_PULLUP)
   if (digitalRead(CONFIG_PIN) == LOW)
   {
     if (buttonDownTime == 0) // Przycisk został właśnie wciśnięty
     {
+      Serial.println("Button pressed");
+      Serial.println("time " + String(millis()) + "");
       buttonDownTime = millis();
     }
     else if ((millis() - buttonDownTime) > CONFIG_RESET_TIMEOUT)
     {
       Serial.println("Resetting configuration...");
-      iotWebConf.getSystemParameterGroup()->applyDefaultValue(); // Reset do wartości domyślnych
-      iotWebConf.saveConfig(); // Zapisz pustą konfigurację
-      ESP.restart(); // Zrestartuj urządzenie
+      //    iotWebConf.getSystemParameterGroup()->applyDefaultValue(); // Reset do wartości domyślnych
+      //     iotWebConf.saveConfig(); // Zapisz pustą konfigurację
+      //     ESP.restart(); // Zrestartuj urządzenie */
     }
   }
   else
@@ -413,127 +421,127 @@ void loop()
     buttonDownTime = 0; // Reset licznika gdy przycisk puszczony
   }
 
-  if (iotWebConf.getState() == 4)
-  {
-    if(ESP.getFreeHeap() < 4096) { // Ostrzeżenie przy małej ilości pamięci
-      Serial.println("Low memory: " + String(ESP.getFreeHeap()));
-    }
-    
-    // Dodaj yield() w długich operacjach
-    yield();  // Pozwól watchdogowi się zresetować
+  // if (iotWebConf.getState() == 4)
+  // {
+  //   if(ESP.getFreeHeap() < 4096) { // Ostrzeżenie przy małej ilości pamięci
+  //     Serial.println("Low memory: " + String(ESP.getFreeHeap()));
+  //   }
 
-    bool anyForcedON = 0;
-    bool anyInputON = 0;
-    unsigned long currentMillis = millis(); // Get the current time
+  //   // Dodaj yield() w długich operacjach
+  //   yield();  // Pozwól watchdogowi się zresetować
 
-    delay(400);
+  //   bool anyForcedON = 0;
+  //   bool anyInputON = 0;
+  //   unsigned long currentMillis = millis(); // Get the current time
 
-    // Upfdate JSON doc from six states on first expander
+  //   delay(400);
 
-    for (int i = 0; i < 6; i++)
-    {
-      String curr_pin = String(ExpInput.digitalRead(i));
+  //   // Upfdate JSON doc from six states on first expander
 
-      if (doc["pin_" + String(i)]["forced"] == "true")
-      {
-        anyForcedON = 1;
-      }
-    }
+  //   for (int i = 0; i < 6; i++)
+  //   {
+  //     String curr_pin = String(ExpInput.digitalRead(i));
 
-    // check woodStove init input
+  //     if (doc["pin_" + String(i)]["forced"] == "true")
+  //     {
+  //       anyForcedON = 1;
+  //     }
+  //   }
 
-    Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
-    if (String(ExpInput.digitalRead(P6)) == "true")
-    {
+  //   // check woodStove init input
 
-      Serial.println("WoodStove operating ");
-      doc["WoodStove"] = "on";
-    }  
-    if (String(ExpInput.digitalRead(P6)) == "false")
-    {
+  //   Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
+  //   if (String(ExpInput.digitalRead(P6)) == "true")
+  //   {
 
-      Serial.println("WoodStove off ");
-      doc["WoodStove"] = "off";
-    }
-   
+  //     Serial.println("WoodStove operating ");
+  //     doc["WoodStove"] = "on";
+  //   }
+  //   if (String(ExpInput.digitalRead(P6)) == "false")
+  //   {
 
-    if (anyForcedON == 1)
-    {
-      for (int i = 0; i < 6; i++)
-      {
+  //     Serial.println("WoodStove off ");
+  //     doc["WoodStove"] = "off";
+  //   }
 
-        if (doc["pin_" + String(i)]["forced"] == "true")
-        {
-          ExpOutput.digitalWrite(i, HIGH);
-        }
-        else
-        {
-          ExpOutput.digitalWrite(i, LOW);
-        }
-      }
-    }
+  //   if (anyForcedON == 1)
+  //   {
+  //     for (int i = 0; i < 6; i++)
+  //     {
 
-    // if (anyForcedON && useGaz_)
-    // {
-    //   // useGaz();
-    // }
+  //       if (doc["pin_" + String(i)]["forced"] == "true")
+  //       {
+  //         ExpOutput.digitalWrite(i, HIGH);
+  //       }
+  //       else
+  //       {
+  //         ExpOutput.digitalWrite(i, LOW);
+  //       }
+  //     }
+  //   }
 
-    if (anyForcedON == 0)
-    {
-      Serial.println("Pump OFF");
-      //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
-      ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
-      //   doc["piec_pompa"] = "OFF";
-      //   doc["led"] = "OFF";
+  //   // if (anyForcedON && useGaz_)
+  //   // {
+  //   //   // useGaz();
+  //   // }
 
-      Serial.println("All valves OFF");
-      for (int i = 0; i < 6; i++)
-      {
+  //   if (anyForcedON == 0)
+  //   {
+  //     Serial.println("Pump OFF");
+  //     //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
+  //     ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+  //     //   doc["piec_pompa"] = "OFF";
+  //     //   doc["led"] = "OFF";
 
-        ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
-      }
-    }
+  //     Serial.println("All valves OFF");
+  //     for (int i = 0; i < 6; i++)
+  //     {
 
-    // WYSYŁANIE JSON PRZEZ WSSOCKET
-    // czy upłynęło co najmniej 20 sekund od ostatniego wysłania
+  //       ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
+  //     }
+  //   }
 
-    if (millis() - lastSendTime > 9000)
-    {
-      String outputJSON;
-      serializeJson(doc, outputJSON);
-      serializeJsonPretty(doc, Serial);
+  //   // WYSYŁANIE JSON PRZEZ WSSOCKET
+  //   // czy upłynęło co najmniej 20 sekund od ostatniego wysłania
 
-      // wysyłanie info do klientów
-      webSocket.broadcastTXT(outputJSON);
-      lastSendTime = millis();
+  //   if (millis() - lastSendTime > 9000)
+  //   {
+  //     String outputJSON;
+  //     serializeJson(doc, outputJSON);
+  //     serializeJsonPretty(doc, Serial);
 
-      Serial.println(String(anyInputON) + ": anyInputON");
-      Serial.println(String(anyForcedON) + ": anyForcedON");
-    }
+  //     // wysyłanie info do klientów
+  //     webSocket.broadcastTXT(outputJSON);
+  //     lastSendTime = millis();
 
-    // Dodaj to w głównej pętli
-    if (millis() - lastSaveTime >= SAVE_INTERVAL) {
-      saveState();
-      lastSaveTime = millis();
-    }
+  //     Serial.println(String(anyInputON) + ": anyInputON");
+  //     Serial.println(String(anyForcedON) + ": anyForcedON");
+  //   }
 
-    delay(10); // Małe opóźnienie zamiast 400ms
-    yield();
-  }
-  else
-  {
-    // Jeśli nie jesteśmy połączeni, skupiamy się tylko na obsłudze konfiguracji
-    iotWebConf.doLoop();
-    delay(1000);
-    return;
-  }
-  
+  //   // Dodaj to w głównej pętli
+  //   if (millis() - lastSaveTime >= SAVE_INTERVAL) {
+  //     saveState();
+  //     lastSaveTime = millis();
+  //   }
+
+  //   delay(10); // Małe opóźnienie zamiast 400ms
+  //   yield();
+  // }
+  // else
+  // {
+  //   // Jeśli nie jesteśmy połączeni, skupiamy się tylko na obsłudze konfiguracji
+
+  //   delay(1000);
+  //   return;
+  // }
+  iotWebConf.doLoop();
   webSocket.loop();
   ArduinoOTA.handle();
 }
 
 // Zmodyfikuj funkcję obsługującą zmianę stanu przekaźnika
-void handleRelay(int relayIndex, bool state) {
+void handleRelay(int relayIndex, bool state)
+{
   digitalWrite(relayPins[relayIndex], state ? HIGH : LOW);
   relayStates[relayIndex].isOn = state;
   // Opcjonalnie możesz tu dodać natychmiastowy zapis stanu
