@@ -54,5 +54,6 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp"
-    }
+    },
+    "zencoder.enableRepoIndexing": true
 }

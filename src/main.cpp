@@ -220,47 +220,191 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
 void saveState()
 {
-  EEPROM.begin(512);
+  const int EEPROM_SIZE = 512;
+  EEPROM.begin(EEPROM_SIZE);
   int addr = 0;
+  const int MAX_SENSOR_NAME = 32; // Maksymalna długość nazwy czujnika
 
   for (int i = 0; i < NUM_RELAYS; i++)
   {
+    // Sprawdź czy mamy wystarczająco miejsca na podstawowe dane (2 bajty)
+    if (addr + 2 >= EEPROM_SIZE) {
+      Serial.println("EEPROM: Brak miejsca na zapis stanu przekaźnika");
+      break;
+    }
+
     EEPROM.write(addr++, relayStates[i].isOn ? 1 : 0);
     EEPROM.write(addr++, relayStates[i].isAuto ? 1 : 0);
-    // Zapisz długość nazwy czujnika
+
+    // Ogranicz długość nazwy czujnika
     byte sensorNameLength = relayStates[i].linkedSensor.length();
+    if (sensorNameLength > MAX_SENSOR_NAME) {
+      sensorNameLength = MAX_SENSOR_NAME;
+      Serial.println("EEPROM: Nazwa czujnika zbyt długa, przycinanie");
+    }
+
+    // Sprawdź czy mamy wystarczająco miejsca na długość nazwy i samą nazwę
+    if (addr + 1 + sensorNameLength >= EEPROM_SIZE) {
+      Serial.println("EEPROM: Brak miejsca na zapis nazwy czujnika");
+      EEPROM.write(addr++, 0); // Zapisz pustą nazwę
+      continue;
+    }
+
     EEPROM.write(addr++, sensorNameLength);
+
     // Zapisz nazwę czujnika
     for (int j = 0; j < sensorNameLength; j++)
     {
       EEPROM.write(addr++, relayStates[i].linkedSensor[j]);
     }
+
+    yield(); // Daj czas watchdogowi na reset
   }
 
-  EEPROM.commit();
+  // Zapisz zmiany
+  bool commitSuccess = EEPROM.commit();
+  if (!commitSuccess) {
+    Serial.println("EEPROM: Błąd podczas zapisu");
+  } else {
+    Serial.println("EEPROM: Zapisano stan przekaźników");
+  }
 }
 
 void loadState()
 {
-  EEPROM.begin(512);
+  const int EEPROM_SIZE = 512;
+  const int MAX_SENSOR_NAME = 32;
+  EEPROM.begin(EEPROM_SIZE);
   int addr = 0;
 
+  Serial.println("\n----- EEPROM: Wczytywanie stanu przekaźników -----");
+  Serial.println("Adres EEPROM: 0x" + String(addr, HEX));
+  Serial.println("Rozmiar EEPROM: " + String(EEPROM_SIZE) + " bajtów");
+  Serial.println("Liczba przekaźników: " + String(NUM_RELAYS));
+
+  // Wyświetl pierwsze 16 bajtów EEPROM w celach diagnostycznych
+  Serial.print("Pierwsze 16 bajtów EEPROM: ");
+  for (int i = 0; i < 16 && i < EEPROM_SIZE; i++) {
+    byte value = EEPROM.read(i);
+    Serial.print("0x");
+    if (value < 16) Serial.print("0");
+    Serial.print(value, HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+
+  // Inicjalizuj wszystkie przekaźniki do stanu domyślnego
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    relayStates[i].isOn = false;
+    relayStates[i].isAuto = true;
+    relayStates[i].linkedSensor = "";
+  }
+
+  // Próba odczytu danych z EEPROM
   for (int i = 0; i < NUM_RELAYS; i++)
   {
-    relayStates[i].isOn = EEPROM.read(addr++) == 1;
-    relayStates[i].isAuto = EEPROM.read(addr++) == 1;
-    // Odczytaj długość nazwy czujnika
-    byte sensorNameLength = EEPROM.read(addr++);
-    char sensorName[33] = {0}; // Max 32 znaki + null terminator
-    // Odczytaj nazwę czujnika
-    for (int j = 0; j < sensorNameLength; j++)
-    {
-      sensorName[j] = EEPROM.read(addr++);
+    Serial.println("\n--- Przekaźnik " + String(i) + " (adres: 0x" + String(addr, HEX) + ") ---");
+
+    // Sprawdź czy mamy wystarczająco danych do odczytu
+    if (addr + 2 >= EEPROM_SIZE) {
+      Serial.println("BŁĄD: Brak miejsca w EEPROM dla przekaźnika " + String(i));
+      break;
     }
+
+    // Odczytaj podstawowe dane
+    byte isOnByte = EEPROM.read(addr);
+    byte isAutoByte = EEPROM.read(addr + 1);
+
+    Serial.print("Stan (bajt): 0x");
+    Serial.print(isOnByte, HEX);
+    Serial.print(", Auto (bajt): 0x");
+    Serial.println(isAutoByte, HEX);
+
+    // Sprawdź poprawność danych
+    if (isOnByte > 1 || isAutoByte > 1) {
+      Serial.println("UWAGA: Nieprawidłowe wartości stanu przekaźnika, używam domyślnych");
+      addr += 2; // Przejdź do następnych danych
+      continue;
+    }
+
+    relayStates[i].isOn = isOnByte == 1;
+    relayStates[i].isAuto = isAutoByte == 1;
+    addr += 2;
+
+    // Odczytaj długość nazwy czujnika
+    if (addr >= EEPROM_SIZE) {
+      Serial.println("BŁĄD: Brak danych o długości nazwy czujnika");
+      continue;
+    }
+
+    byte sensorNameLength = EEPROM.read(addr++);
+    Serial.print("Długość nazwy czujnika (bajt): 0x");
+    Serial.print(sensorNameLength, HEX);
+    Serial.print(" (");
+    Serial.print(sensorNameLength);
+    Serial.println(" znaków)");
+
+    // Sprawdź czy długość nazwy jest sensowna
+    if (sensorNameLength > MAX_SENSOR_NAME || sensorNameLength == 0) {
+      Serial.println("BŁĄD: Nieprawidłowa długość nazwy czujnika");
+      continue;
+    }
+
+    // Sprawdź czy mamy wystarczająco danych do odczytu nazwy
+    if (addr + sensorNameLength > EEPROM_SIZE) {
+      Serial.println("BŁĄD: Brak pełnych danych nazwy czujnika");
+      continue;
+    }
+
+    // Odczytaj nazwę czujnika
+    char sensorName[MAX_SENSOR_NAME + 1] = {0}; // +1 na null terminator
+
+    Serial.print("Dane nazwy czujnika (hex): ");
+    for (int j = 0; j < sensorNameLength && j < MAX_SENSOR_NAME; j++) {
+      byte charValue = EEPROM.read(addr + j);
+      Serial.print("0x");
+      if (charValue < 16) Serial.print("0");
+      Serial.print(charValue, HEX);
+      Serial.print(" ");
+
+      // Sprawdź czy znak jest drukowalny (ASCII 32-126)
+      if (charValue >= 32 && charValue <= 126) {
+        sensorName[j] = (char)charValue;
+      } else {
+        Serial.print("\nUWAGA: Wykryto nieprawidłowy znak ASCII: ");
+        Serial.println(charValue);
+        sensorName[j] = '_'; // Zastąp nieprawidłowy znak
+      }
+    }
+    Serial.println();
+
+    addr += sensorNameLength;
     relayStates[i].linkedSensor = String(sensorName);
 
-    // Zastosuj odczytany stan
-    digitalWrite(relayPins[i], relayStates[i].isOn ? HIGH : LOW);
+    // Zastosuj odczytany stan do przekaźnika
+    ExpOutput.digitalWrite(relayPins[i], relayStates[i].isOn ? LOW : HIGH);
+
+    Serial.println("PODSUMOWANIE przekaźnika " + String(i) + ":");
+    Serial.println("  - Stan: " + String(relayStates[i].isOn ? "WŁĄCZONY" : "WYŁĄCZONY"));
+    Serial.println("  - Tryb: " + String(relayStates[i].isAuto ? "AUTOMATYCZNY" : "RĘCZNY"));
+    Serial.println("  - Czujnik: '" + relayStates[i].linkedSensor + "'");
+
+    yield(); // Daj czas watchdogowi
+  }
+
+  Serial.println("\n----- EEPROM: Zakończono wczytywanie stanu -----");
+
+  // Jeśli wykryto problemy, zainicjuj EEPROM domyślnymi wartościami
+  if (addr < 6) { // Jeśli odczytano mniej niż 6 bajtów (minimum dla jednego przekaźnika)
+    Serial.println("UWAGA: Wykryto problemy z danymi EEPROM, inicjalizuję domyślnymi wartościami");
+    for (int i = 0; i < NUM_RELAYS; i++) {
+      relayStates[i].isOn = false;
+      relayStates[i].isAuto = true;
+      relayStates[i].linkedSensor = "";
+      ExpOutput.digitalWrite(relayPins[i], HIGH); // Wyłącz wszystkie przekaźniki
+    }
+    // Zapisz domyślne wartości
+    saveState();
   }
 }
 
@@ -350,13 +494,13 @@ void setup()
   prepareDataForWebServer();
 
   // uruchomienie serwera WebSocket
-  // webSocket.begin();
-  // webSocket.onEvent(onWsEvent);
+  webSocket.begin();
+  webSocket.onEvent(onWsEvent);
   // Serial.println("WebSocket server started");
 
   //  ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
-  // initInputExpander();
-  // initOutputExpander();
+  initInputExpander();
+  initOutputExpander();
 
   // INICJALIZACJA PCF
   Serial.print("Init input Expander...");
@@ -387,12 +531,12 @@ void setup()
   initInputExpander();
   // timers.attach(0, 1000, functionName);
 
-  // loadState(); // Dodaj to na końcu setup()
+  loadState(); // Dodaj to na końcu setup()
 
   // Po inicjalizacji WebSocket wyślij informację
-  // String resetJSON;
-  // serializeJson(resetDoc, resetJSON);
-  // webSocket.broadcastTXT(resetJSON);
+  String resetJSON;
+  serializeJson(resetDoc, resetJSON);
+  webSocket.broadcastTXT(resetJSON);
 }
 
 void loop()
@@ -407,6 +551,8 @@ void loop()
       Serial.println("Button pressed");
       Serial.println("time " + String(millis()) + "");
       buttonDownTime = millis();
+      // load state and print
+      loadState();
     }
     else if ((millis() - buttonDownTime) > CONFIG_RESET_TIMEOUT)
     {
@@ -414,6 +560,9 @@ void loop()
       //    iotWebConf.getSystemParameterGroup()->applyDefaultValue(); // Reset do wartości domyślnych
       //     iotWebConf.saveConfig(); // Zapisz pustą konfigurację
       //     ESP.restart(); // Zrestartuj urządzenie */
+      // save state 
+      saveState();
+      
     }
   }
   else

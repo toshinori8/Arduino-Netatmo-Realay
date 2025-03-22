@@ -1032,8 +1032,8 @@ let dataIncoming = false;
 let usegaz = document.querySelector(".usegaz");
 
 const messageElements = document.querySelector(".console");
-WSaddress = "ws://192.168.8.33:8080";
-// WSaddress='ws://' + window.location.hostname + ':8080';
+// WSaddress = "ws://192.168.8.33:8080";
+WSaddress='ws://' + window.location.hostname + ':8080';
 // WSaddress='ws://netatmo_relay.local/:8080';
 
 
