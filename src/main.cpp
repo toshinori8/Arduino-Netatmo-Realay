@@ -12,11 +12,11 @@
 #include <EEPROM.h>
 #include <Esp.h>
 
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+// #include <Wire.h>
+// #include <Adafruit_GFX.h>
+// #include <Adafruit_SSD1306.h>
 
-Adafruit_SSD1306 display(128, 64, &Wire, -1); // Użyj -1, jeśli nie używasz resetu
+// Adafruit_SSD1306 display(128, 64, &Wire, -1); // Użyj -1, jeśli nie używasz resetu
 
 const int NUM_RELAYS = 6;                             // liczba przekaźników
 const int relayPins[NUM_RELAYS] = {0, 1, 2, 3, 4, 5}; // piny przekaźników na ekspanderze
@@ -181,6 +181,24 @@ void manifoldLogic()
       ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
     }
   }
+
+// WYSYŁANIE JSON PRZEZ WSSOCKET
+  // czy upłynęło co najmniej 20 sekund od ostatniego wysłania
+
+  if (millis() - lastSendTime > 9000)
+  {
+    String outputJSON;
+    serializeJson(docPins, outputJSON);
+    serializeJsonPretty(docPins, Serial);
+
+    // wysyłanie info do klientów
+    webSocket.broadcastTXT(outputJSON);
+    lastSendTime = millis();
+
+    Serial.println(String(anyInputON) + ": anyInputON");
+    Serial.println(String(anyForcedON) + ": anyForcedON");
+  }
+
 }
 
 void otaStart();
@@ -545,8 +563,8 @@ void setup()
 {
   Serial.begin(9600);
 
-  Wire.begin();                              // Inicjalizacja magistrali I2C
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Adres OLED
+  // Wire.begin();                              // Inicjalizacja magistrali I2C
+  // display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Adres OLED
 
   // Dodaj na początku setup
   // ESP.wdtDisable();                       // Wyłącz watchdog na czas setupu
@@ -702,11 +720,11 @@ void loop()
       saveState();
       lastSaveTime = millis();
     }
-
+   manifoldLogic();
 
     webSocket.loop();
 
-    manifoldLogic();
+ 
   
   
   }
