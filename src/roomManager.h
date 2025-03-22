@@ -3,7 +3,8 @@
 #include <vector>
 #include <string>
 
-struct RoomData {
+struct RoomData
+{
     std::string name;         // Nazwa pokoju
     int ID;                   // ID pokoju
     int pinNumber;            // Numer przyporzadkowanego pinu
@@ -16,32 +17,44 @@ struct RoomData {
         : name(name), pinNumber(pinNumber), targetTemperature(targetTemperature), currentTemperature(currentTemperature), forced(forced) {}
 };
 
-class RoomManager {
+class RoomManager
+{
 public:
-    void addRoom(const RoomData& room) {
+    void addRoom(const RoomData &room)
+    {
         rooms.push_back(room);
     }
 
-    RoomData getRoom(int index) {
-        if (index >= 0 && index < rooms.size()) {
+    RoomData getRoom(int index)
+    {
+        if (index >= 0 && index < rooms.size())
+        {
             return rooms[index];
-        } else {
+        }
+        else
+        {
             // Wyrzuć wyjątek lub zwróć pustą strukturę
             throw std::out_of_range("Index out of range");
         }
     }
 
-    void updateRoom(int index, const RoomData& room) {
-        if (index >= 0 && index < rooms.size()) {
+    void updateRoom(int index, const RoomData &room)
+    {
+        if (index >= 0 && index < rooms.size())
+        {
             rooms[index] = room;
-        } else {
+        }
+        else
+        {
             // Wyrzuć wyjątek lub zwróć pustą strukturę
             throw std::out_of_range("Index out of range");
         }
     }
 
-    void printRooms() {
-        for (const auto& room : rooms) {
+    void printRooms()
+    {
+        for (const auto &room : rooms)
+        {
             std::cout << "Nazwa pokoju: " << room.name << std::endl;
             std::cout << "Numer pinu: " << room.pinNumber << std::endl;
             std::cout << "Temperatura zadana: " << room.targetTemperature << std::endl;
@@ -50,6 +63,8 @@ public:
             std::cout << std::endl;
         }
     }
+
+    
 
 private:
     std::vector<RoomData> rooms;

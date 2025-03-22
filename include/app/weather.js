@@ -59,9 +59,9 @@ function getForecast() {
       srcOfImage = "//openweathermap.org/img/wn/" + data_.current.weather[0].icon + "@2x.png";
       document.querySelector('.ifdata').classList.toggle('active');
       $("footer .a_weather").append(`<img  src="//${srcOfImage}" alt=""/>`)
-      $("footer .a_weather").show();
+      $("footer .a_weather, .modal-back").show();
       $('.container-modal').hide();
-      $('.weather_widget .close, footer .a_weather').bind('click', function () {
+      $('.weather_widget .close, footer .a_weather,  .modal-back').bind('click', function () {
         $('.container-modal').toggle(300);
       });
 

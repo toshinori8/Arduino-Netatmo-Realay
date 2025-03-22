@@ -1,5 +1,4 @@
 #include <Arduino.h>
-
 #include <ArduinoOTA.h>
 #include "PCF8574.h"
 #include <Wire.h>
@@ -13,6 +12,12 @@
 #include <EEPROM.h>
 #include <Esp.h>
 
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+Adafruit_SSD1306 display(128, 64, &Wire, -1); // Użyj -1, jeśli nie używasz resetu
+
 const int NUM_RELAYS = 6;                             // liczba przekaźników
 const int relayPins[NUM_RELAYS] = {0, 1, 2, 3, 4, 5}; // piny przekaźników na ekspanderze
 
@@ -23,7 +28,7 @@ WebSocketsServer webSocket(8080);
 
 bool useGaz_ = true; // use gas? button on webPage
 
-StaticJsonDocument<200> doc;
+StaticJsonDocument<200> docPins;
 
 #include <IotWebConf.h>
 const char thingName[] = "Netatmo_Relay";
@@ -64,18 +69,19 @@ const int WATCHDOG_TIMEOUT = 8; // sekundy na watchdog timer
 void prepareDataForWebServer()
 {
 
-  doc["pin_0"]["state"] = "OFF";
-  doc["pin_0"]["forced"] = "false";
+  docPins["pin_0"]["state"] = "OFF";
+  docPins["pin_0"]["forced"] = "false";
 
-  doc["pin_1"]["state"] = "OFF";
-  doc["pin_1"]["forced"] = "false";
+  docPins["pin_1"]["state"] = "OFF";
+  docPins["pin_1"]["forced"] = "false";
 
-  doc["pin_2"]["state"] = "OFF";
-  doc["pin_2"]["forced"] = "false";
+  docPins["pin_2"]["state"] = "OFF";
+  docPins["pin_2"]["forced"] = "false";
 
-  doc["pin_3"]["state"] = "OFF";
-  doc["pin_3"]["forced"] = "false";
-  doc["WoodStove"] = "off";
+  docPins["pin_3"]["state"] = "OFF";
+  docPins["pin_3"]["forced"] = "false";
+  docPins["WoodStove"] = "off";
+   docPins["manifoldTemp"] = "";
 }
 
 void handleRoot()
@@ -84,7 +90,11 @@ void handleRoot()
   {
     return;
   }
-  server.send(200, "text/html", webpage);
+  else
+  {
+    server.sendHeader("Cache-Control", "no-cache"); // Dodaj nagłówek Cache-Control
+    server.send(200, "text/html", webpage);
+  }
 }
 
 // utworzenie obiektu klasy Timers z trzema odliczającymi
@@ -93,6 +103,85 @@ void handleRoot()
 // obiekty ekspanderów PCF8574
 PCF8574 ExpInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
 PCF8574 ExpOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
+
+
+float manifoldTemp;
+
+void manifoldLogic()
+{
+
+  bool anyForcedON = 0;
+  bool anyInputON = 0;
+  docPins["manifoldTemp"] = manifoldTemp;
+  unsigned long currentMillis = millis(); // Get the current time
+
+  delay(400);
+
+  // Update JSON doc from six states on first expander
+
+  for (int i = 0; i < 6; i++)
+  {
+    String curr_pin = String(ExpInput.digitalRead(i));
+
+    if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
+    {
+      anyForcedON = 1;
+    }
+  }
+
+  // check woodStove init input
+
+  // Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
+  if (String(ExpInput.digitalRead(P6)) == "true")
+  {
+
+    // Serial.println("WoodStove operating ");
+    docPins["WoodStove"] = "on";
+  }
+  if (String(ExpInput.digitalRead(P6)) == "false")
+  {
+
+    // Serial.println("WoodStove off ");
+    docPins["WoodStove"] = "off";
+  }
+
+  if (anyForcedON == 1)
+  {
+    for (int i = 0; i < 6; i++)
+    {
+
+      if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
+      {
+        ExpOutput.digitalWrite(i, HIGH);
+      }
+      else
+      {
+        ExpOutput.digitalWrite(i, LOW);
+      }
+    }
+  }
+
+  // if (anyForcedON && useGaz_)
+  // {
+  //   // useGaz();
+  // }
+
+  if (anyForcedON == 0)
+  {
+    // Serial.println("Pump OFF");
+    //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
+    ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+    //   doc["piec_pompa"] = "OFF";
+    //   doc["led"] = "OFF";
+
+    // Serial.println("All valves OFF");
+    for (int i = 0; i < 6; i++)
+    {
+
+      ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
+    }
+  }
+}
 
 void otaStart();
 
@@ -145,8 +234,8 @@ void useGaz(void)
 
   ExpOutput.digitalWrite(P6, LOW); // LED ON
   ExpOutput.digitalWrite(P7, LOW); // Pompa ON
-  doc["piec_pompa"] = "ON";
-  doc["led"] = "ON";
+  docPins["piec_pompa"] = "ON";
+  docPins["led"] = "ON";
 }
 // Obsługa eventow Websocket
 void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
@@ -198,14 +287,14 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
     if (forced == "true")
     {
-      doc[pin]["state"] = "ON";
-      doc[pin]["forced"] = "true";
+      docPins[pin]["state"] = "ON";
+      docPins[pin]["forced"] = "true";
     }
     else
     {
 
-      doc[pin]["state"] = "OFF";
-      doc[pin]["forced"] = "false";
+      docPins[pin]["state"] = "OFF";
+      docPins[pin]["forced"] = "false";
     }
 
     // char data[200];
@@ -228,7 +317,8 @@ void saveState()
   for (int i = 0; i < NUM_RELAYS; i++)
   {
     // Sprawdź czy mamy wystarczająco miejsca na podstawowe dane (2 bajty)
-    if (addr + 2 >= EEPROM_SIZE) {
+    if (addr + 2 >= EEPROM_SIZE)
+    {
       Serial.println("EEPROM: Brak miejsca na zapis stanu przekaźnika");
       break;
     }
@@ -238,13 +328,15 @@ void saveState()
 
     // Ogranicz długość nazwy czujnika
     byte sensorNameLength = relayStates[i].linkedSensor.length();
-    if (sensorNameLength > MAX_SENSOR_NAME) {
+    if (sensorNameLength > MAX_SENSOR_NAME)
+    {
       sensorNameLength = MAX_SENSOR_NAME;
       Serial.println("EEPROM: Nazwa czujnika zbyt długa, przycinanie");
     }
 
     // Sprawdź czy mamy wystarczająco miejsca na długość nazwy i samą nazwę
-    if (addr + 1 + sensorNameLength >= EEPROM_SIZE) {
+    if (addr + 1 + sensorNameLength >= EEPROM_SIZE)
+    {
       Serial.println("EEPROM: Brak miejsca na zapis nazwy czujnika");
       EEPROM.write(addr++, 0); // Zapisz pustą nazwę
       continue;
@@ -263,9 +355,12 @@ void saveState()
 
   // Zapisz zmiany
   bool commitSuccess = EEPROM.commit();
-  if (!commitSuccess) {
+  if (!commitSuccess)
+  {
     Serial.println("EEPROM: Błąd podczas zapisu");
-  } else {
+  }
+  else
+  {
     Serial.println("EEPROM: Zapisano stan przekaźników");
   }
 }
@@ -284,17 +379,20 @@ void loadState()
 
   // Wyświetl pierwsze 16 bajtów EEPROM w celach diagnostycznych
   Serial.print("Pierwsze 16 bajtów EEPROM: ");
-  for (int i = 0; i < 16 && i < EEPROM_SIZE; i++) {
+  for (int i = 0; i < 16 && i < EEPROM_SIZE; i++)
+  {
     byte value = EEPROM.read(i);
     Serial.print("0x");
-    if (value < 16) Serial.print("0");
+    if (value < 16)
+      Serial.print("0");
     Serial.print(value, HEX);
     Serial.print(" ");
   }
   Serial.println();
 
   // Inicjalizuj wszystkie przekaźniki do stanu domyślnego
-  for (int i = 0; i < NUM_RELAYS; i++) {
+  for (int i = 0; i < NUM_RELAYS; i++)
+  {
     relayStates[i].isOn = false;
     relayStates[i].isAuto = true;
     relayStates[i].linkedSensor = "";
@@ -306,7 +404,8 @@ void loadState()
     Serial.println("\n--- Przekaźnik " + String(i) + " (adres: 0x" + String(addr, HEX) + ") ---");
 
     // Sprawdź czy mamy wystarczająco danych do odczytu
-    if (addr + 2 >= EEPROM_SIZE) {
+    if (addr + 2 >= EEPROM_SIZE)
+    {
       Serial.println("BŁĄD: Brak miejsca w EEPROM dla przekaźnika " + String(i));
       break;
     }
@@ -321,7 +420,8 @@ void loadState()
     Serial.println(isAutoByte, HEX);
 
     // Sprawdź poprawność danych
-    if (isOnByte > 1 || isAutoByte > 1) {
+    if (isOnByte > 1 || isAutoByte > 1)
+    {
       Serial.println("UWAGA: Nieprawidłowe wartości stanu przekaźnika, używam domyślnych");
       addr += 2; // Przejdź do następnych danych
       continue;
@@ -332,7 +432,8 @@ void loadState()
     addr += 2;
 
     // Odczytaj długość nazwy czujnika
-    if (addr >= EEPROM_SIZE) {
+    if (addr >= EEPROM_SIZE)
+    {
       Serial.println("BŁĄD: Brak danych o długości nazwy czujnika");
       continue;
     }
@@ -345,13 +446,15 @@ void loadState()
     Serial.println(" znaków)");
 
     // Sprawdź czy długość nazwy jest sensowna
-    if (sensorNameLength > MAX_SENSOR_NAME || sensorNameLength == 0) {
+    if (sensorNameLength > MAX_SENSOR_NAME || sensorNameLength == 0)
+    {
       Serial.println("BŁĄD: Nieprawidłowa długość nazwy czujnika");
       continue;
     }
 
     // Sprawdź czy mamy wystarczająco danych do odczytu nazwy
-    if (addr + sensorNameLength > EEPROM_SIZE) {
+    if (addr + sensorNameLength > EEPROM_SIZE)
+    {
       Serial.println("BŁĄD: Brak pełnych danych nazwy czujnika");
       continue;
     }
@@ -360,17 +463,22 @@ void loadState()
     char sensorName[MAX_SENSOR_NAME + 1] = {0}; // +1 na null terminator
 
     Serial.print("Dane nazwy czujnika (hex): ");
-    for (int j = 0; j < sensorNameLength && j < MAX_SENSOR_NAME; j++) {
+    for (int j = 0; j < sensorNameLength && j < MAX_SENSOR_NAME; j++)
+    {
       byte charValue = EEPROM.read(addr + j);
       Serial.print("0x");
-      if (charValue < 16) Serial.print("0");
+      if (charValue < 16)
+        Serial.print("0");
       Serial.print(charValue, HEX);
       Serial.print(" ");
 
       // Sprawdź czy znak jest drukowalny (ASCII 32-126)
-      if (charValue >= 32 && charValue <= 126) {
+      if (charValue >= 32 && charValue <= 126)
+      {
         sensorName[j] = (char)charValue;
-      } else {
+      }
+      else
+      {
         Serial.print("\nUWAGA: Wykryto nieprawidłowy znak ASCII: ");
         Serial.println(charValue);
         sensorName[j] = '_'; // Zastąp nieprawidłowy znak
@@ -395,9 +503,11 @@ void loadState()
   Serial.println("\n----- EEPROM: Zakończono wczytywanie stanu -----");
 
   // Jeśli wykryto problemy, zainicjuj EEPROM domyślnymi wartościami
-  if (addr < 6) { // Jeśli odczytano mniej niż 6 bajtów (minimum dla jednego przekaźnika)
+  if (addr < 6)
+  { // Jeśli odczytano mniej niż 6 bajtów (minimum dla jednego przekaźnika)
     Serial.println("UWAGA: Wykryto problemy z danymi EEPROM, inicjalizuję domyślnymi wartościami");
-    for (int i = 0; i < NUM_RELAYS; i++) {
+    for (int i = 0; i < NUM_RELAYS; i++)
+    {
       relayStates[i].isOn = false;
       relayStates[i].isAuto = true;
       relayStates[i].linkedSensor = "";
@@ -435,8 +545,11 @@ void setup()
 {
   Serial.begin(9600);
 
+  Wire.begin();                              // Inicjalizacja magistrali I2C
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Adres OLED
+
   // Dodaj na początku setup
-  // ESP.wdtDisable(); // Wyłącz watchdog na czas setupu
+  // ESP.wdtDisable();                       // Wyłącz watchdog na czas setupu
   // ESP.wdtEnable(WATCHDOG_TIMEOUT * 1000); // Włącz watchdog z timeoutem w ms
 
   pinMode(CONFIG_PIN, INPUT_PULLUP);
@@ -455,8 +568,13 @@ void setup()
   iotWebConf.setWifiConnectionCallback(&wifiConnected);
   iotWebConf.setConfigSavedCallback(&configSaved);
 
+  iotWebConf.setConfigPin(CONFIG_PIN);
+  iotWebConf.setStatusPin(LED_BUILTIN);
+  // pauza na trzy sekundy dla przycisniecia przycisku flash by wlaczyc tryb AP
+  delay(3000);
+
   // Zwiększ timeout na połączenie WiFi
-  iotWebConf.setApTimeoutMs(120000); // 2 minuty na konfigurację
+  iotWebConf.setApTimeoutMs(10000);
 
   // Inicjalizacja z większym debugowaniem
   Serial.println("Starting up...");
@@ -487,8 +605,8 @@ void setup()
   Serial.println("Ready.");
 
   // uruchomienie serwera HTTP
-  // server.begin();
-  // Serial.println("HTTP server started");
+  server.begin();
+  Serial.println("HTTP server started");
 
   // przygotowanie zmienych do odbioru z webpage
   prepareDataForWebServer();
@@ -525,8 +643,6 @@ void setup()
     Serial.println("error");
   }
 
-  // blinkOutput(20);
-
   otaStart();
   initInputExpander();
   // timers.attach(0, 1000, functionName);
@@ -541,7 +657,7 @@ void setup()
 
 void loop()
 {
-  // ESP.wdtFeed(); // Reset watchdog timer
+  //ESP.wdtFeed(); // Reset watchdog timer
 
   // Sprawdź czy przycisk jest wciśnięty (stan niski bo INPUT_PULLUP)
   if (digitalRead(CONFIG_PIN) == LOW)
@@ -557,12 +673,10 @@ void loop()
     else if ((millis() - buttonDownTime) > CONFIG_RESET_TIMEOUT)
     {
       Serial.println("Resetting configuration...");
-      //    iotWebConf.getSystemParameterGroup()->applyDefaultValue(); // Reset do wartości domyślnych
-      //     iotWebConf.saveConfig(); // Zapisz pustą konfigurację
-      //     ESP.restart(); // Zrestartuj urządzenie */
-      // save state 
-      saveState();
-      
+      iotWebConf.getSystemParameterGroup()->applyDefaultValue(); // Reset do wartości domyślnych
+      iotWebConf.saveConfig();                                   // Zapisz pustą konfigurację
+      ESP.restart();                                             // Zrestartuj urządzenie */
+      // save state
     }
   }
   else
@@ -570,122 +684,36 @@ void loop()
     buttonDownTime = 0; // Reset licznika gdy przycisk puszczony
   }
 
-  // if (iotWebConf.getState() == 4)
-  // {
-  //   if(ESP.getFreeHeap() < 4096) { // Ostrzeżenie przy małej ilości pamięci
-  //     Serial.println("Low memory: " + String(ESP.getFreeHeap()));
-  //   }
-
-  //   // Dodaj yield() w długich operacjach
-  //   yield();  // Pozwól watchdogowi się zresetować
-
-  //   bool anyForcedON = 0;
-  //   bool anyInputON = 0;
-  //   unsigned long currentMillis = millis(); // Get the current time
-
-  //   delay(400);
-
-  //   // Upfdate JSON doc from six states on first expander
-
-  //   for (int i = 0; i < 6; i++)
-  //   {
-  //     String curr_pin = String(ExpInput.digitalRead(i));
-
-  //     if (doc["pin_" + String(i)]["forced"] == "true")
-  //     {
-  //       anyForcedON = 1;
-  //     }
-  //   }
-
-  //   // check woodStove init input
-
-  //   Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
-  //   if (String(ExpInput.digitalRead(P6)) == "true")
-  //   {
-
-  //     Serial.println("WoodStove operating ");
-  //     doc["WoodStove"] = "on";
-  //   }
-  //   if (String(ExpInput.digitalRead(P6)) == "false")
-  //   {
-
-  //     Serial.println("WoodStove off ");
-  //     doc["WoodStove"] = "off";
-  //   }
-
-  //   if (anyForcedON == 1)
-  //   {
-  //     for (int i = 0; i < 6; i++)
-  //     {
-
-  //       if (doc["pin_" + String(i)]["forced"] == "true")
-  //       {
-  //         ExpOutput.digitalWrite(i, HIGH);
-  //       }
-  //       else
-  //       {
-  //         ExpOutput.digitalWrite(i, LOW);
-  //       }
-  //     }
-  //   }
-
-  //   // if (anyForcedON && useGaz_)
-  //   // {
-  //   //   // useGaz();
-  //   // }
-
-  //   if (anyForcedON == 0)
-  //   {
-  //     Serial.println("Pump OFF");
-  //     //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
-  //     ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
-  //     //   doc["piec_pompa"] = "OFF";
-  //     //   doc["led"] = "OFF";
-
-  //     Serial.println("All valves OFF");
-  //     for (int i = 0; i < 6; i++)
-  //     {
-
-  //       ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
-  //     }
-  //   }
-
-  //   // WYSYŁANIE JSON PRZEZ WSSOCKET
-  //   // czy upłynęło co najmniej 20 sekund od ostatniego wysłania
-
-  //   if (millis() - lastSendTime > 9000)
-  //   {
-  //     String outputJSON;
-  //     serializeJson(doc, outputJSON);
-  //     serializeJsonPretty(doc, Serial);
-
-  //     // wysyłanie info do klientów
-  //     webSocket.broadcastTXT(outputJSON);
-  //     lastSendTime = millis();
-
-  //     Serial.println(String(anyInputON) + ": anyInputON");
-  //     Serial.println(String(anyForcedON) + ": anyForcedON");
-  //   }
-
-  //   // Dodaj to w głównej pętli
-  //   if (millis() - lastSaveTime >= SAVE_INTERVAL) {
-  //     saveState();
-  //     lastSaveTime = millis();
-  //   }
-
-  //   delay(10); // Małe opóźnienie zamiast 400ms
-  //   yield();
-  // }
-  // else
-  // {
-  //   // Jeśli nie jesteśmy połączeni, skupiamy się tylko na obsłudze konfiguracji
-
-  //   delay(1000);
-  //   return;
-  // }
   iotWebConf.doLoop();
-  webSocket.loop();
-  ArduinoOTA.handle();
+  
+  if (iotWebConf.getState() == 4)
+  {
+    if (ESP.getFreeHeap() < 4096)
+    { // Ostrzeżenie przy małej ilości pamięci
+      Serial.println("Low memory: " + String(ESP.getFreeHeap()));
+    }
+
+    // Dodaj yield() w długich operacjach
+  //  yield(); // Pozwól watchdogowi się zresetować
+
+    // Dodaj to w głównej pętli
+    if (millis() - lastSaveTime >= SAVE_INTERVAL)
+    {
+      saveState();
+      lastSaveTime = millis();
+    }
+
+
+    webSocket.loop();
+
+    manifoldLogic();
+  
+  
+  }
+     server.handleClient();
+   ArduinoOTA.handle();
+
+  
 }
 
 // Zmodyfikuj funkcję obsługującą zmianę stanu przekaźnika

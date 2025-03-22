@@ -225,12 +225,13 @@ body {
 
 .container-modal .modal-back {
 
-  position: absolute;
+  position: fixed;
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
   top: 0px;
   backdrop-filter: blur(10px);
+  bottom: 0px;
 }
 
 
@@ -406,12 +407,12 @@ body {
 }
 
 .containerouter {
-  scale: 80%;
+  /* scale: 80%; */
   /* height: 100%; */
   position: absolute;
   overflow: hidden;
-  margin-bottom: 400px;
-  margin-top: 20px;
+  /* margin-bottom: 400px; */
+  /* margin-top: 20px; */
   border-radius: 20px;
   box-shadow: 0px 0px 122px rgba(10, 10, 10, 0.2);
   border: solid rgba(20, 20, 20, 0.3);
@@ -465,7 +466,7 @@ footer ion-icon:hover {
 }
 
 .imageBack_container {
-  position: absolute;
+  position: fixed;
   z-index: 0;
   right: -24%;
   bottom: 0px;
@@ -614,6 +615,7 @@ footer ion-icon:hover {
   display: flex;
   justify-content: center;
 
+  z-index: 30000;
 }
 
 
@@ -1368,9 +1370,9 @@ function getForecast() {
       srcOfImage = "//openweathermap.org/img/wn/" + data_.current.weather[0].icon + "@2x.png";
       document.querySelector('.ifdata').classList.toggle('active');
       $("footer .a_weather").append(`<img  src="//${srcOfImage}" alt=""/>`)
-      $("footer .a_weather").show();
+      $("footer .a_weather, .modal-back").show();
       $('.container-modal').hide();
-      $('.weather_widget .close, footer .a_weather').bind('click', function () {
+      $('.weather_widget .close, footer .a_weather,  .modal-back').bind('click', function () {
         $('.container-modal').toggle(300);
       });
 
