@@ -100,8 +100,13 @@ window.addEventListener("focus", function () {
 
 
 socket.onmessage = function (event) {
+  console.log("Received message:", event.data);
   const data = JSON.parse(event.data);
-
+  
+  if (data.type === 'debug_logs') {
+    displayDebugLogs(data.logs);
+    return;
+  }
 
   if (data.response === "connected") {
     messageElements.textContent = "WS Connected";
@@ -288,5 +293,46 @@ socket.onmessage = function(e) {
 
 
 };
+
+// Dodaj na początku pliku po innych stałych
+let debugLogs = [];
+let isDebugVisible = false;
+
+// Funkcja do wyświetlania logów debugowania
+function displayDebugLogs(logs) {
+  const debugLogsContainer = document.getElementById('debug-logs');
+  if (!debugLogsContainer) return;
+
+  // Podziel logi na linie i dodaj każdą jako osobny element
+  const logLines = logs.split('\n');
+  debugLogsContainer.innerHTML = ''; // Wyczyść poprzednie logi
+  
+  logLines.forEach(line => {
+    if (line.trim()) { // Pomijamy puste linie
+      const logLine = document.createElement('div');
+      logLine.className = 'debug-log-line';
+      logLine.textContent = line;
+      debugLogsContainer.appendChild(logLine);
+    }
+  });
+
+  // Przewiń do najnowszych logów
+  debugLogsContainer.scrollTop = debugLogsContainer.scrollHeight;
+}
+
+// Obsługa przycisku do wyświetlania logów
+document.addEventListener('DOMContentLoaded', function() {
+  const debugToggle = document.getElementById('debug-toggle');
+  const debugLogs = document.getElementById('debug-logs');
+  let isDebugVisible = false;
+
+  if (debugToggle && debugLogs) {
+    debugToggle.addEventListener('click', function() {
+      isDebugVisible = !isDebugVisible;
+      debugLogs.style.display = isDebugVisible ? 'block' : 'none';
+      // debugToggle.textContent = isDebugVisible ? 'Ukryj logi' : 'Pokaż logi';
+    });
+  }
+});
 
 

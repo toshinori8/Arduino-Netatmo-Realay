@@ -37,6 +37,7 @@
   <link rel="stylesheet" href="css/weather.css" />
   <link rel="stylesheet" href="css/qr_code.css" />
 <!-- END INCLUDE STYLES -->
+
 </head>
 
 <html>
@@ -245,7 +246,10 @@
       <ion-icon name="qr-code-outline"></ion-icon>
     </a>
   
-    
+    <a href="#" class="noselect a_logs" id="debug-toggle">
+      <ion-icon name="terminal-outline"></ion-icon>
+
+    </a>
     <p>
 
       <svg class="iconHeat" version="1.1" xmlns="//www.w3.org/2000/svg" xmlns:xlink="//www.w3.org/1999/xlink"
@@ -286,18 +290,11 @@
   </footer>
 
 
+  
+  <!-- Kontener na logi -->
+  <div id="debug-logs"></div>
 
-
-
-
-
-<div class="qr-code ring-8 ring-white ring-opacity-40" style=""></div>
-
- 
-
-
-
-
+  <div class="qr-code ring-8 ring-white ring-opacity-40" style=""></div>
 
 </body>
 
@@ -312,6 +309,5 @@
       
       <!-- QRCODE -->
       <script type="text/javascript" src="app/qr_code.js"></script>
-
 
 </html>

@@ -181,6 +181,54 @@ body {
   margin: 120px !important;
 }
 
+
+#debug-logs {
+    /* position: absolute; */
+    /* bottom: 0; */
+    right: 0;
+    width: 80%;
+    height: 40vh;
+    background: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 10px;
+    overflow-y: auto;
+    z-index: 1000;
+    border-top-left-radius: 5px;
+    bottom: 120px;
+    display: none;
+    text-align: left;
+    box-shadow: 2px 2px 122px 12px rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    border: 2px solid rgba(220, 20, 20, 0.4);
+    padding: 20px;
+    transition: all ease 0.4s;
+}
+
+.debug-log-line {
+  margin: 2px 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+#debug-toggle {
+  /* background: #333; */
+  /* color: #00ff00; */
+  /* border: 1px solid #00ff00; */
+  border-radius: 3px;
+  cursor: pointer;
+  z-index: 1001;
+}
+
+#debug-toggle:hover {
+  background: #444;
+}
+
+
+
+
+
 .containerouter .container {
 
   background: rgba(200, 200, 200, 1);
@@ -747,6 +795,7 @@ footer a.a_qrcode ion-icon{
       color: rgba(255,255,255,0.7) !important;
   }</style>
 <!-- END INCLUDE STYLES -->
+
 </head>
 
 <html>
@@ -955,7 +1004,10 @@ footer a.a_qrcode ion-icon{
       <ion-icon name="qr-code-outline"></ion-icon>
     </a>
   
-    
+    <a href="#" class="noselect a_logs" id="debug-toggle">
+      <ion-icon name="terminal-outline"></ion-icon>
+
+    </a>
     <p>
 
       <svg class="iconHeat" version="1.1" xmlns="//www.w3.org/2000/svg" xmlns:xlink="//www.w3.org/1999/xlink"
@@ -996,18 +1048,11 @@ footer a.a_qrcode ion-icon{
   </footer>
 
 
+  
+  <!-- Kontener na logi -->
+  <div id="debug-logs"></div>
 
-
-
-
-
-<div class="qr-code ring-8 ring-white ring-opacity-40" style=""></div>
-
- 
-
-
-
-
+  <div class="qr-code ring-8 ring-white ring-opacity-40" style=""></div>
 
 </body>
 
@@ -1115,8 +1160,13 @@ window.addEventListener("focus", function () {
 
 
 socket.onmessage = function (event) {
+  console.log("Received message:", event.data);
   const data = JSON.parse(event.data);
-
+  
+  if (data.type === 'debug_logs') {
+    displayDebugLogs(data.logs);
+    return;
+  }
 
   if (data.response === "connected") {
     messageElements.textContent = "WS Connected";
@@ -1303,6 +1353,47 @@ socket.onmessage = function(e) {
 
 
 };
+
+// Dodaj na początku pliku po innych stałych
+let debugLogs = [];
+let isDebugVisible = false;
+
+// Funkcja do wyświetlania logów debugowania
+function displayDebugLogs(logs) {
+  const debugLogsContainer = document.getElementById('debug-logs');
+  if (!debugLogsContainer) return;
+
+  // Podziel logi na linie i dodaj każdą jako osobny element
+  const logLines = logs.split('\n');
+  debugLogsContainer.innerHTML = ''; // Wyczyść poprzednie logi
+  
+  logLines.forEach(line => {
+    if (line.trim()) { // Pomijamy puste linie
+      const logLine = document.createElement('div');
+      logLine.className = 'debug-log-line';
+      logLine.textContent = line;
+      debugLogsContainer.appendChild(logLine);
+    }
+  });
+
+  // Przewiń do najnowszych logów
+  debugLogsContainer.scrollTop = debugLogsContainer.scrollHeight;
+}
+
+// Obsługa przycisku do wyświetlania logów
+document.addEventListener('DOMContentLoaded', function() {
+  const debugToggle = document.getElementById('debug-toggle');
+  const debugLogs = document.getElementById('debug-logs');
+  let isDebugVisible = false;
+
+  if (debugToggle && debugLogs) {
+    debugToggle.addEventListener('click', function() {
+      isDebugVisible = !isDebugVisible;
+      debugLogs.style.display = isDebugVisible ? 'block' : 'none';
+      // debugToggle.textContent = isDebugVisible ? 'Ukryj logi' : 'Pokaż logi';
+    });
+  }
+});
 
 
 </script>
@@ -1526,7 +1617,6 @@ $("a.a_qrcode, .qr-code .qr-close").on("click", function(){
 }
 
 </script>
-
 
 </html>
 
