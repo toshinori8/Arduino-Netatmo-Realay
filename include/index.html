@@ -74,8 +74,6 @@
 
   </div>
   <div class="containerouter">
-
-
     <div class="container">
       <h3 class="noselect">Przedpokój</h3>
       <div class="checkbox-container purple noselect">
@@ -116,31 +114,25 @@
       </div>
     </div>
 
-    <div class="container disabled">
+    <div class="container">
       <h3 class="noselect">Klatka schodowa</h3>
       <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch noselect" disabled id="pin_4" />
+        <input type="checkbox" class="switch noselect" id="pin_4" />
         <label for="pin_4"></label>
         <div class="active-circle"></div>
       </div>
     </div>
-    <div class="container disabled">
+
+    <div class="container">
       <h3 class="noselect">Gościnny</h3>
       <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch noselect" id="pin_0" disabled />
-
-        <label for="pin_0"></label>
+        <input type="checkbox" class="switch noselect" id="pin_5" />
+        <label for="pin_5"></label>
         <div class="active-circle"></div>
       </div>
     </div>
-
-
-
-
-
-
   </div>
 
   <div class="ifdata">
@@ -311,3 +303,27 @@
       <script type="text/javascript" src="app/qr_code.js"></script>
 
 </html>
+
+<style>
+  #debug-logs {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 300px;
+    max-height: 400px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    font-family: monospace;
+    padding: 10px;
+    border-radius: 5px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  }
+
+  .debug-log-line {
+    margin: 2px 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+</style>

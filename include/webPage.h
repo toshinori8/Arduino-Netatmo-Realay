@@ -832,8 +832,6 @@ footer a.a_qrcode ion-icon{
 
   </div>
   <div class="containerouter">
-
-
     <div class="container">
       <h3 class="noselect">Przedpokój</h3>
       <div class="checkbox-container purple noselect">
@@ -874,31 +872,25 @@ footer a.a_qrcode ion-icon{
       </div>
     </div>
 
-    <div class="container disabled">
+    <div class="container">
       <h3 class="noselect">Klatka schodowa</h3>
       <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch noselect" disabled id="pin_4" />
+        <input type="checkbox" class="switch noselect" id="pin_4" />
         <label for="pin_4"></label>
         <div class="active-circle"></div>
       </div>
     </div>
-    <div class="container disabled">
+
+    <div class="container">
       <h3 class="noselect">Gościnny</h3>
       <div class="checkbox-container purple noselect">
         <ion-icon class="handIcon disabled" name="hand-right-outline"></ion-icon>
-        <input type="checkbox" class="switch noselect" id="pin_0" disabled />
-
-        <label for="pin_0"></label>
+        <input type="checkbox" class="switch noselect" id="pin_5" />
+        <label for="pin_5"></label>
         <div class="active-circle"></div>
       </div>
     </div>
-
-
-
-
-
-
   </div>
 
   <div class="ifdata">
@@ -1095,24 +1087,22 @@ const checkBoxes = function () {
   for (let i = 0; i < checkboxes.length; i++) {
     checkboxes[i].addEventListener("click", function () {
       let state = this.checked;
+      let pin_number = this.getAttribute("ID");
 
-      checkboxes[i].parentElement.querySelector(".handIcon").classList.toggle("disabled");
+      // Aktualizuj ikonę ręki
+      const handIcon = this.parentElement.querySelector(".handIcon");
+      handIcon.classList.toggle("disabled", !state);
 
-      let pin_number = checkboxes[i].getAttribute("ID")
-
-      // create a JSON message with the pin number and state
+      // Twórz wiadomość JSON z poprawnymi wartościami
       const message = {
         pin: pin_number,
-        state: state ? "ON" : "SRODD",
-        forced: state ? "true" : "DRALCE"
+        state: state ? "ON" : "OFF",
+        forced: state ? "true" : "false"
       };
 
-      console.log(message);
-      // send the message through the WebSocket
-
+      console.log("Wysyłanie wiadomości:", message);
       socket.send(JSON.stringify(message));
     });
-
   }
 };
 
@@ -1160,7 +1150,7 @@ window.addEventListener("focus", function () {
 
 
 socket.onmessage = function (event) {
-  console.log("Received message:", event.data);
+  console.log("Otrzymano wiadomość:", event.data);
   const data = JSON.parse(event.data);
   
   if (data.type === 'debug_logs') {
@@ -1173,68 +1163,22 @@ socket.onmessage = function (event) {
     dataIncoming = true;
   }
 
-  if (dataIncoming) {
-
-    console.log(data)
-    for (const key in data) {
-      // Pobranie elementu HTML o identyfikatorze równym nazwie właściwości (np. "pin_4")
-
-      // if (key == "piec_pompa") {
-      //   const iconHeat = document.querySelector(".iconHeat");
-
-      //   if (data[key] == "ON") {
-      //     iconHeat.classList.add("active");
-      //   } else {
-      //     iconHeat.classList.remove("active");
-      //   }
-      // }
-
-      if (key.includes("pin_")) {
-
-        let element = document.getElementById(key);
-        // Jeśli element istnieje i jest elementem "input type="checkbox""
-        if (element && element.type === "checkbox") {
-          // Ustawienie atrybutu "checked" elementu za pomocą wartości właściwości (np. "ON" lub "OFF")
-          element.checked = data[key]["state"] === "ON";
+  if (dataIncoming && data.pins) {
+    // Aktualizuj stan przekaźników
+    for (const key in data.pins) {
+      const pinData = data.pins[key];
+      const element = document.getElementById(key);
+      
+      if (element && element.type === "checkbox") {
+        element.checked = pinData.state === "ON";
+        // Aktualizuj ikonę ręki
+        const handIcon = element.parentElement.querySelector(".handIcon");
+        if (handIcon) {
+          handIcon.classList.toggle("disabled", pinData.state !== "ON");
         }
-        const handIcon_ = document.getElementById(key).parentElement.querySelector(".handIcon");
-        // Jeśli element istnieje i jest elementem "input type="checkbox""
-        if (element && element.type === "checkbox") {
-          // Ustawienie atrybutu "checked" elementu za pomocą wartości właściwości (np. "ON" lub "OFF")
-          element.checked = data[key]["state"] === "ON";
-          if (data[key]["forced"] === "true") {
-            handIcon_.classList.remove("disabled");
-          } else (handIcon_.classList.add("disabled"))
-        }
-      }
-
-
-
-
-
-      const checkboxes = document.querySelectorAll(
-        '.checkbox-container input[type="checkbox"]'
-      );
-
-      for (let i = 0; i < checkboxes.length; i++) {
-        let checked = false;
-        for (let j = 0; j < checkboxes.length; j++) {
-          if (checkboxes[j].checked) {
-            checked = true;
-            break;
-          }
-        }
-
-        document.body.classList.toggle("orange", checked);
       }
     }
-
-
-
   }
-
-
-
 };
 
 socket.onopen = function () {
@@ -1390,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', function() {
     debugToggle.addEventListener('click', function() {
       isDebugVisible = !isDebugVisible;
       debugLogs.style.display = isDebugVisible ? 'block' : 'none';
-      // debugToggle.textContent = isDebugVisible ? 'Ukryj logi' : 'Pokaż logi';
+      debugToggle.textContent = isDebugVisible ? 'Ukryj logi' : 'Pokaż logi';
     });
   }
 });
@@ -1619,5 +1563,29 @@ $("a.a_qrcode, .qr-code .qr-close").on("click", function(){
 </script>
 
 </html>
+
+<style>
+  #debug-logs {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 300px;
+    max-height: 400px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    font-family: monospace;
+    padding: 10px;
+    border-radius: 5px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  }
+
+  .debug-log-line {
+    margin: 2px 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+</style>
 
 )rawliteral";

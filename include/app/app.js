@@ -35,24 +35,22 @@ const checkBoxes = function () {
   for (let i = 0; i < checkboxes.length; i++) {
     checkboxes[i].addEventListener("click", function () {
       let state = this.checked;
+      let pin_number = this.getAttribute("ID");
 
-      checkboxes[i].parentElement.querySelector(".handIcon").classList.toggle("disabled");
+      // Aktualizuj ikonę ręki
+      const handIcon = this.parentElement.querySelector(".handIcon");
+      handIcon.classList.toggle("disabled", !state);
 
-      let pin_number = checkboxes[i].getAttribute("ID")
-
-      // create a JSON message with the pin number and state
+      // Twórz wiadomość JSON z poprawnymi wartościami
       const message = {
         pin: pin_number,
-        state: state ? "ON" : "SRODD",
-        forced: state ? "true" : "DRALCE"
+        state: state ? "ON" : "OFF",
+        forced: state ? "true" : "false"
       };
 
-      console.log(message);
-      // send the message through the WebSocket
-
+      console.log("Wysyłanie wiadomości:", message);
       socket.send(JSON.stringify(message));
     });
-
   }
 };
 
@@ -100,7 +98,7 @@ window.addEventListener("focus", function () {
 
 
 socket.onmessage = function (event) {
-  console.log("Received message:", event.data);
+  console.log("Otrzymano wiadomość:", event.data);
   const data = JSON.parse(event.data);
   
   if (data.type === 'debug_logs') {
@@ -113,68 +111,22 @@ socket.onmessage = function (event) {
     dataIncoming = true;
   }
 
-  if (dataIncoming) {
-
-    console.log(data)
-    for (const key in data) {
-      // Pobranie elementu HTML o identyfikatorze równym nazwie właściwości (np. "pin_4")
-
-      // if (key == "piec_pompa") {
-      //   const iconHeat = document.querySelector(".iconHeat");
-
-      //   if (data[key] == "ON") {
-      //     iconHeat.classList.add("active");
-      //   } else {
-      //     iconHeat.classList.remove("active");
-      //   }
-      // }
-
-      if (key.includes("pin_")) {
-
-        let element = document.getElementById(key);
-        // Jeśli element istnieje i jest elementem "input type="checkbox""
-        if (element && element.type === "checkbox") {
-          // Ustawienie atrybutu "checked" elementu za pomocą wartości właściwości (np. "ON" lub "OFF")
-          element.checked = data[key]["state"] === "ON";
+  if (dataIncoming && data.pins) {
+    // Aktualizuj stan przekaźników
+    for (const key in data.pins) {
+      const pinData = data.pins[key];
+      const element = document.getElementById(key);
+      
+      if (element && element.type === "checkbox") {
+        element.checked = pinData.state === "ON";
+        // Aktualizuj ikonę ręki
+        const handIcon = element.parentElement.querySelector(".handIcon");
+        if (handIcon) {
+          handIcon.classList.toggle("disabled", pinData.state !== "ON");
         }
-        const handIcon_ = document.getElementById(key).parentElement.querySelector(".handIcon");
-        // Jeśli element istnieje i jest elementem "input type="checkbox""
-        if (element && element.type === "checkbox") {
-          // Ustawienie atrybutu "checked" elementu za pomocą wartości właściwości (np. "ON" lub "OFF")
-          element.checked = data[key]["state"] === "ON";
-          if (data[key]["forced"] === "true") {
-            handIcon_.classList.remove("disabled");
-          } else (handIcon_.classList.add("disabled"))
-        }
-      }
-
-
-
-
-
-      const checkboxes = document.querySelectorAll(
-        '.checkbox-container input[type="checkbox"]'
-      );
-
-      for (let i = 0; i < checkboxes.length; i++) {
-        let checked = false;
-        for (let j = 0; j < checkboxes.length; j++) {
-          if (checkboxes[j].checked) {
-            checked = true;
-            break;
-          }
-        }
-
-        document.body.classList.toggle("orange", checked);
       }
     }
-
-
-
   }
-
-
-
 };
 
 socket.onopen = function () {
@@ -330,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function() {
     debugToggle.addEventListener('click', function() {
       isDebugVisible = !isDebugVisible;
       debugLogs.style.display = isDebugVisible ? 'block' : 'none';
-      // debugToggle.textContent = isDebugVisible ? 'Ukryj logi' : 'Pokaż logi';
+      debugToggle.textContent = isDebugVisible ? 'Ukryj logi' : 'Pokaż logi';
     });
   }
 });

@@ -20,6 +20,14 @@
 
 const int NUM_RELAYS = 6;                             // liczba przekaźników
 const int relayPins[NUM_RELAYS] = {0, 1, 2, 3, 4, 5}; // piny przekaźników na ekspanderze
+const char* relayNames[NUM_RELAYS] = {
+  "Przedpokój",
+  "Sypialnia",
+  "Kuchnia",
+  "Łazienka",
+  "Klatka schodowa",
+  "Gościnny"
+};
 
 unsigned long lastSendTime = 0;
 unsigned long previousMillis = 0;      // Variable to store the previous time
@@ -32,10 +40,10 @@ StaticJsonDocument<200> docPins;
 
 #include <IotWebConf.h>
 const char thingName[] = "Netatmo_Relay";
-const char wifiInitialApPassword[] = "12345678";
+const char wifiInitialApPassword[] = "pmgana921";
 
 // Dodaj domyślną konfigurację WiFi
-const char DEFAULT_WIFI_SSID[] = "ooooio";
+const char DEFAULT_WIFI_SSID[] = "oooooio";
 const char DEFAULT_WIFI_PASSWORD[] = "pmgana921";
 
 void handleRoot();
@@ -341,59 +349,48 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     StaticJsonDocument<200> docInput;
     // handle incoming text message from client
     String messageText = String((char *)payload).substring(0, length);
+    addDebugLog("Otrzymano wiadomość: " + messageText);
+    
     // parse the JSON message
     DeserializationError error = deserializeJson(docInput, messageText);
     if (error)
     {
-      Serial.println("Error parsing JSON");
+      addDebugLog("Błąd parsowania JSON: " + String(error.c_str()));
       return;
     }
 
     if (docInput["usegaz"])
     {
       String gas = String(docInput["usegaz"]);
-      Serial.println("usegaz - detected");
-      if (gas == "true")
-      {
-        useGaz_ = true;
-      }
-      else
-      {
-        useGaz_ = false;
-      }
+      addDebugLog("Wykryto usegaz: " + gas);
+      useGaz_ = (gas == "true");
     }
 
-    // extract the pin number and state from the JSON message
-    pin = String(docInput["pin"]);
-    forced = String(docInput["forced"]);
-    state = String(docInput["state"]);
-
-    if (forced == "true")
+    // Sprawdź czy wiadomość zawiera informacje o pinie
+    if (docInput["pin"])
     {
-      docPins[pin]["state"] = "ON";
-      docPins[pin]["forced"] = "true";
-      // Dodaj sterowanie przekaźnikiem
-      int pinNumber = pin.substring(4).toInt(); // Konwertuj "pin_X" na numer pinu
-      if (pinNumber >= 0 && pinNumber < NUM_RELAYS) {
-        ExpOutput->digitalWrite(pinNumber, LOW); // Włącz przekaźnik (aktywny stan niski)
-      }
-    }
-    else
-    {
-      docPins[pin]["state"] = "OFF";
-      docPins[pin]["forced"] = "false";
-      // Dodaj sterowanie przekaźnikiem
-      int pinNumber = pin.substring(4).toInt(); // Konwertuj "pin_X" na numer pinu
-      if (pinNumber >= 0 && pinNumber < NUM_RELAYS) {
-        ExpOutput->digitalWrite(pinNumber, HIGH); // Wyłącz przekaźnik (nieaktywny stan wysoki)
-      }
-    }
+      String pin = String(docInput["pin"]);
+      String state = String(docInput["state"]);
+      String forced = String(docInput["forced"]);
+      
+      addDebugLog("Przetwarzanie wiadomości dla pinu: " + pin + ", stan: " + state + ", forced: " + forced);
 
-    // char data[200];
-    // size_t len = serializeJson(doc, data);
-    // webSocket.sendTXT(len, data);
-    // ExpOutput.digitalWrite(P0, HIGH);
-    // set the state of the input pin on the PCF8574 input expander
+      // Konwertuj "pin_X" na numer pinu
+      int pinNumber = pin.substring(4).toInt();
+      if (pinNumber >= 0 && pinNumber < NUM_RELAYS) {
+        bool newState = (state == "ON");
+        
+        // Aktualizuj stan w docPins
+        docPins[pin]["state"] = state;
+        docPins[pin]["forced"] = forced;
+        
+        // Steruj przekaźnikiem
+        ExpOutput->digitalWrite(pinNumber, newState ? LOW : HIGH);
+        addDebugLog("Ustawiono stan pinu " + String(pinNumber) + " na " + (newState ? "ON" : "OFF"));
+      } else {
+        addDebugLog("Nieprawidłowy numer pinu: " + String(pinNumber));
+      }
+    }
   }
   break;
   }
