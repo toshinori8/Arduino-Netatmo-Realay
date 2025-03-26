@@ -168,5 +168,3 @@ let nextDays = async (data) => {
 }
 // setInterval(getForecast, 20000) // 33,33 minuty 
 
-
-

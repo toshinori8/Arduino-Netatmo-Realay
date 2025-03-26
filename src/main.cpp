@@ -11,6 +11,18 @@
 #include <functional>
 #include <EEPROM.h>
 #include <Esp.h>
+#include "manifoldLogic.h"
+
+
+
+#include <ArduinoJson.h>
+
+#ifndef IOTWEBCONF_ENABLE_JSON
+# error platformio.ini must contain "build_flags = -DIOTWEBCONF_ENABLE_JSON"
+#endif
+void readConfigFile();
+
+
 
 // #include <Wire.h>
 // #include <Adafruit_GFX.h>
@@ -43,8 +55,12 @@ const char thingName[] = "Netatmo_Relay";
 const char wifiInitialApPassword[] = "pmgana921";
 
 // Dodaj domyślną konfigurację WiFi
-const char DEFAULT_WIFI_SSID[] = "oooooio";
-const char DEFAULT_WIFI_PASSWORD[] = "pmgana921";
+const char iwcWifiSsid[] = "oooooio";
+const char iwcWifiPassword[] = "pmgana921";
+
+
+
+
 
 void handleRoot();
 DNSServer dnsServer;
@@ -56,13 +72,9 @@ String woodStove;
 String state;
 String pin;
 
-// Struktura do przechowywania stanu przekaźnika
-struct RelayState
-{
-  bool isOn;
-  bool isAuto;
-  String linkedSensor;
-};
+// Deklaracje funkcji
+void saveState();
+void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
 
 RelayState relayStates[NUM_RELAYS];
 unsigned long lastSaveTime = 0;
@@ -131,269 +143,158 @@ void handleRoot()
   }
   else
   {
-    server.sendHeader("Cache-Control", "no-cache"); // Dodaj nagłówek Cache-Control
+    server.sendHeader("Cache-Control", "no-cache");
     server.send(200, "text/html", webpage);
   }
+}
+
+// Dodajemy obsługę OPTIONS dla CORS
+void handleOptions() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+  server.send(200);
 }
 
 // utworzenie obiektu klasy Timers z trzema odliczającymi
 // Timers<3> timers;
 
 // obiekty ekspanderów PCF8574
-PCF8574* ExpInput = nullptr;
-PCF8574* ExpOutput = nullptr;
+PCF8574 ExpInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
+PCF8574 ExpOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
 
 float manifoldTemp;
 
-void manifoldLogic()
-{
-  bool anyForcedON = 0;
-  bool anyInputON = 0;
-  docPins["manifoldTemp"] = manifoldTemp;
-  unsigned long currentMillis = millis();
-
-  delay(400);
-
-  for (int i = 0; i < 6; i++)
-  {
-    String curr_pin = String(ExpInput->digitalRead(i));
-
-    if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
-    {
-      anyForcedON = 1;
-    }
-  }
-
-  if (String(ExpInput->digitalRead(P6)) == "true")
-  {
-    docPins["WoodStove"] = "on";
-  }
-  if (String(ExpInput->digitalRead(P6)) == "false")
-  {
-    docPins["WoodStove"] = "off";
-  }
-
-  if (anyForcedON == 1)
-  {
-    for (int i = 0; i < 6; i++)
-    {
-      if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
-      {
-        ExpOutput->digitalWrite(i, HIGH);
-      }
-      else
-      {
-        ExpOutput->digitalWrite(i, LOW);
-      }
-    }
-  }
-
-  if (anyForcedON == 0)
-  {
-    ExpOutput->digitalWrite(P7, HIGH); // Pompa OFF
-
-    for (int i = 0; i < 6; i++)
-    {
-      ExpOutput->digitalWrite(i, HIGH); // Pinoutput OFF
-    }
-  }
-
-  if (millis() - lastSendTime > 9000)
-  {
-    String outputJSON;
-    serializeJson(docPins, outputJSON);
-    addDebugLog("JSON status: " + outputJSON);
-
-    webSocket.broadcastTXT(outputJSON);
-    lastSendTime = millis();
-
-    addDebugLog("Status: anyInputON=" + String(anyInputON) + ", anyForcedON=" + String(anyForcedON));
-  }
-}
-
 void otaStart();
 
-// Funkcja skanująca urządzenia I2C
-void scanI2CDevices() {
-  addDebugLog("Skanowanie urządzeń I2C...");
-  byte error, address;
-  int deviceCount = 0;
-  
-  for(address = 1; address < 127; address++) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-    
-    if (error == 0) {
-      deviceCount++;
-      addDebugLog("Znaleziono urządzenie I2C pod adresem 0x" + String(address, HEX));
-      
-      // Sprawdź czy to PCF8574
-      if (address == 0x20 || address == 0x26) {
-        addDebugLog("Wykryto PCF8574 pod adresem 0x" + String(address, HEX));
-      }
-    }
-  }
-  
-  if (deviceCount == 0) {
-    addDebugLog("Nie znaleziono żadnych urządzeń I2C!");
-  } else {
-    addDebugLog("Znaleziono " + String(deviceCount) + " urządzeń I2C");
-  }
-}
-void blinkOutput(int timer)
-{
-  addDebugLog("Test migania diod - wszystkie wyjścia");
-  
-  // Włącz wszystkie wyjścia
-  for (int i = 0; i < 7; i++)
-  {
-    ExpOutput->digitalWrite(i, LOW);
-    addDebugLog("Włączono wyjście " + String(i));
-  }
-  delay(timer);
-  
-  // Wyłącz wszystkie wyjścia
-  for (int i = 0; i < 7; i++)
-  {
-    ExpOutput->digitalWrite(i, HIGH);
-    addDebugLog("Wyłączono wyjście " + String(i));
-  }
-  
-  addDebugLog("Test migania zakończony");
-}
 void initInputExpander()
 {
-  addDebugLog("Inicjalizacja ekspandera wejść...");
-  
-  // Próba znalezienia ekspandera wejść
-  ExpInput = new PCF8574(0x20);
-  
-  if (ExpInput->begin()) {
-    addDebugLog("Ekspander wejść (0x20) zainicjalizowany pomyślnie");
-    
-    // ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
-    ExpInput->pinMode(P0, INPUT_PULLUP);
-    ExpInput->pinMode(P1, INPUT_PULLUP);
-    ExpInput->pinMode(P2, INPUT_PULLUP);
-    ExpInput->pinMode(P3, INPUT_PULLUP);
-    ExpInput->pinMode(P4, INPUT_PULLUP);
-    ExpInput->pinMode(P5, INPUT_PULLUP);
-    ExpInput->pinMode(P6, INPUT_PULLUP);
-    ExpInput->pinMode(P7, INPUT_PULLUP);
-    
-    // Ustawienie stanu początkowego
-    ExpInput->digitalWrite(P0, HIGH);
-    ExpInput->digitalWrite(P1, HIGH);
-    ExpInput->digitalWrite(P2, HIGH);
-    ExpInput->digitalWrite(P3, HIGH);
-    ExpInput->digitalWrite(P4, HIGH);
-    ExpInput->digitalWrite(P5, HIGH);
-    ExpInput->digitalWrite(P6, HIGH);
-    ExpInput->digitalWrite(P7, HIGH);
-  } else {
-    addDebugLog("BŁĄD: Nie udało się zainicjalizować ekspandera wejść (0x20)");
-  }
-}
+  // ustawienie pinów jako wejścia i włączenie wbudowanych rezystorów podciągających
 
+  ExpInput.pinMode(P0, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P1, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P2, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P3, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P4, INPUT_PULLUP); // netatmo relays input pin
+  ExpInput.pinMode(P5, INPUT_PULLUP); // netatmo relays input pin
 
+  ExpInput.pinMode(P6, INPUT_PULLUP); // input from stove
+  ExpInput.pinMode(P7, INPUT_PULLUP); // unused input
+
+  ExpInput.digitalWrite(P0, HIGH);
+  ExpInput.digitalWrite(P1, HIGH);
+  ExpInput.digitalWrite(P2, HIGH);
+  ExpInput.digitalWrite(P3, HIGH);
+  ExpInput.digitalWrite(P4, HIGH);
+  ExpInput.digitalWrite(P5, HIGH);
+
+  ExpInput.digitalWrite(P6, HIGH);
+  ExpInput.digitalWrite(P7, HIGH);
+};
 void initOutputExpander()
 {
-  addDebugLog("Inicjalizacja ekspandera wyjść...");
-  
-  // Próba znalezienia ekspandera wyjść
-  ExpOutput = new PCF8574(0x26);
-  
-  if (ExpOutput->begin()) {
-    addDebugLog("Ekspander wyjść (0x26) zainicjalizowany pomyślnie");
-    
-    for (int i = 0; i < 7; i++) {
-      ExpOutput->pinMode(i, OUTPUT);
-      ExpOutput->digitalWrite(i, HIGH);
-    }
-    
-    // Wykonaj test migania diod
-    blinkOutput(1000);
-  } else {
-    addDebugLog("BŁĄD: Nie udało się zainicjalizować ekspandera wyjść (0x26)");
+  for (int i = 0; i < 7; i++)
+  {
+
+    ExpOutput.pinMode(i, OUTPUT);
+    ExpOutput.digitalWrite(i, HIGH);
+  }
+};
+void blinkOutput(int timer)
+{
+  for (int i = 0; i < 7; i++)
+  {
+    ExpOutput.digitalWrite(i, LOW);
+    delay(timer);
+    ExpOutput.digitalWrite(i, HIGH);
   }
 }
-
 
 void useGaz(void)
 {
 
-  ExpOutput->digitalWrite(P6, LOW); // LED ON
-  ExpOutput->digitalWrite(P7, LOW); // Pompa ON
+  ExpOutput.digitalWrite(P6, LOW); // LED ON
+  ExpOutput.digitalWrite(P7, LOW); // Pompa ON
   docPins["piec_pompa"] = "ON";
   docPins["led"] = "ON";
 }
-// Obsługa eventow Websocket
-void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
-{
-  switch (type)
-  {
-  case WStype_DISCONNECTED:
-    addDebugLog("Client disconnected from WebSocket");
-    break;
-  case WStype_CONNECTED:
-  {
-    addDebugLog("New client connected to WebSocket");
-    String message = "{\"response\":\"connected\"}";
-    webSocket.sendTXT(num, message);
-    // Wyślij zebrane logi po połączeniu
-    sendDebugLogs();
-  }
-  break;
-  case WStype_TEXT:
-  {
-    StaticJsonDocument<200> docInput;
-    // handle incoming text message from client
-    String messageText = String((char *)payload).substring(0, length);
-    addDebugLog("Otrzymano wiadomość: " + messageText);
+// Funkcja do aktualizacji stanu przekaźnika
+void updateRelayState(int relayIndex, bool newState) {
+  if (relayIndex >= 0 && relayIndex < NUM_RELAYS) {
+    relayStates[relayIndex].isOn = newState;
+    relayStates[relayIndex].isAuto = false; // Przy ręcznym przełączeniu wyłączamy tryb auto
     
-    // parse the JSON message
-    DeserializationError error = deserializeJson(docInput, messageText);
-    if (error)
-    {
-      addDebugLog("Błąd parsowania JSON: " + String(error.c_str()));
-      return;
+    // Aktualizuj stan fizyczny przekaźnika
+    ExpOutput.digitalWrite(relayPins[relayIndex], newState ? LOW : HIGH);
+    
+    // Zapisz stan do EEPROM
+    saveState();
+    
+    // Wyślij aktualizację przez WebSocket
+    StaticJsonDocument<2048> stateDoc;
+    stateDoc["type"] = "state";
+    stateDoc["timestamp"] = millis();
+    stateDoc["manifoldTemp"] = manifoldTemp;
+    stateDoc["woodStove"] = (String(ExpInput.digitalRead(P6)) == "true");
+    
+    // Dodaj stany przekaźników
+    JsonArray relays = stateDoc.createNestedArray("relays");
+    for (int i = 0; i < NUM_RELAYS; i++) {
+      JsonObject relay = relays.createNestedObject();
+      relay["id"] = i;
+      relay["name"] = relayStates[i].name;
+      relay["isOn"] = relayStates[i].isOn;
+      relay["isAuto"] = relayStates[i].isAuto;
+      relay["linkedSensor"] = relayStates[i].linkedSensor;
     }
 
-    if (docInput["usegaz"])
-    {
-      String gas = String(docInput["usegaz"]);
-      addDebugLog("Wykryto usegaz: " + gas);
-      useGaz_ = (gas == "true");
-    }
+    String outputJSON;
+    serializeJson(stateDoc, outputJSON);
+    webSocket.broadcastTXT(outputJSON);
+    
+    addDebugLog("Zaktualizowano stan przekaźnika " + relayStates[relayIndex].name + 
+                " na " + (newState ? "ON" : "OFF"));
+  }
+}
 
-    // Sprawdź czy wiadomość zawiera informacje o pinie
-    if (docInput["pin"])
-    {
-      String pin = String(docInput["pin"]);
-      String state = String(docInput["state"]);
-      String forced = String(docInput["forced"]);
-      
-      addDebugLog("Przetwarzanie wiadomości dla pinu: " + pin + ", stan: " + state + ", forced: " + forced);
-
-      // Konwertuj "pin_X" na numer pinu
-      int pinNumber = pin.substring(4).toInt();
-      if (pinNumber >= 0 && pinNumber < NUM_RELAYS) {
-        bool newState = (state == "ON");
-        
-        // Aktualizuj stan w docPins
-        docPins[pin]["state"] = state;
-        docPins[pin]["forced"] = forced;
-        
-        // Steruj przekaźnikiem
-        ExpOutput->digitalWrite(pinNumber, newState ? LOW : HIGH);
-        addDebugLog("Ustawiono stan pinu " + String(pinNumber) + " na " + (newState ? "ON" : "OFF"));
-      } else {
-        addDebugLog("Nieprawidłowy numer pinu: " + String(pinNumber));
-      }
+void checkThermostatInputs() {
+  for (int i = 0; i < 6; i++) {
+    bool inputState = ExpInput.digitalRead(i);
+    if (inputState == LOW) { // Pin zwarty (termostat wymusza)
+      relayStates[i].isForcedByThermostat = true;
+      relayStates[i].isOn = true;
+      ExpOutput.digitalWrite(relayPins[i], LOW);
+    } else {
+      relayStates[i].isForcedByThermostat = false;
     }
   }
-  break;
+}
+
+// Funkcja do wysyłania pełnego stanu przekaźników
+void sendRelayStates() {
+  StaticJsonDocument<2048> stateDoc;
+  stateDoc["type"] = "state";
+  stateDoc["timestamp"] = millis();
+  stateDoc["manifoldTemp"] = manifoldTemp;
+  stateDoc["woodStove"] = (String(ExpInput.digitalRead(P6)) == "true");
+  
+  // Dodaj stany przekaźników
+  JsonArray relays = stateDoc.createNestedArray("relays");
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    JsonObject relay = relays.createNestedObject();
+    relay["id"] = i;
+    relay["name"] = relayStates[i].name;
+    relay["isOn"] = relayStates[i].isOn;
+    relay["isAuto"] = relayStates[i].isAuto;
+    relay["linkedSensor"] = relayStates[i].linkedSensor;
+    relay["isForcedByThermostat"] = relayStates[i].isForcedByThermostat;
   }
+
+  String outputJSON;
+  serializeJson(stateDoc, outputJSON);
+  webSocket.broadcastTXT(outputJSON);
+  
+  addDebugLog("Wysłano pełny stan: " + outputJSON);
 }
 
 void saveState()
@@ -401,50 +302,45 @@ void saveState()
   const int EEPROM_SIZE = 512;
   EEPROM.begin(EEPROM_SIZE);
   int addr = 0;
-  const int MAX_SENSOR_NAME = 32;
+  const int MAX_NAME_LENGTH = 32;
 
   for (int i = 0; i < NUM_RELAYS; i++)
   {
-    if (addr + 2 >= EEPROM_SIZE)
+    if (addr + 3 >= EEPROM_SIZE)
     {
       addDebugLog("EEPROM: Brak miejsca na zapis stanu przekaźnika");
       break;
     }
 
+    // Zapisz stan podstawowy
     EEPROM.write(addr++, relayStates[i].isOn ? 1 : 0);
     EEPROM.write(addr++, relayStates[i].isAuto ? 1 : 0);
-
-    byte sensorNameLength = relayStates[i].linkedSensor.length();
-    if (sensorNameLength > MAX_SENSOR_NAME)
-    {
-      sensorNameLength = MAX_SENSOR_NAME;
-      addDebugLog("EEPROM: Nazwa czujnika zbyt długa, przycinanie");
+    
+    // Zapisz długość nazwy
+    byte nameLength = relayStates[i].name.length();
+    if (nameLength > MAX_NAME_LENGTH) {
+      nameLength = MAX_NAME_LENGTH;
+      addDebugLog("EEPROM: Nazwa zbyt długa, przycinanie");
     }
-
-    if (addr + 1 + sensorNameLength >= EEPROM_SIZE)
-    {
-      addDebugLog("EEPROM: Brak miejsca na zapis nazwy czujnika");
-      EEPROM.write(addr++, 0);
+    EEPROM.write(addr++, nameLength);
+    
+    // Zapisz nazwę
+    if (addr + nameLength >= EEPROM_SIZE) {
+      addDebugLog("EEPROM: Brak miejsca na zapis nazwy");
       continue;
     }
-
-    EEPROM.write(addr++, sensorNameLength);
-
-    for (int j = 0; j < sensorNameLength; j++)
-    {
-      EEPROM.write(addr++, relayStates[i].linkedSensor[j]);
+    
+    for (int j = 0; j < nameLength; j++) {
+      EEPROM.write(addr++, relayStates[i].name[j]);
     }
 
     yield();
   }
 
   bool commitSuccess = EEPROM.commit();
-  if (!commitSuccess)
-  {
+  if (!commitSuccess) {
     addDebugLog("EEPROM: Błąd podczas zapisu");
-  }
-  else
-  {
+  } else {
     addDebugLog("EEPROM: Zapisano stan przekaźników");
   }
 }
@@ -452,139 +348,68 @@ void saveState()
 void loadState()
 {
   const int EEPROM_SIZE = 512;
-  const int MAX_SENSOR_NAME = 32;
+  const int MAX_NAME_LENGTH = 32;
   EEPROM.begin(EEPROM_SIZE);
   int addr = 0;
 
   addDebugLog("\n----- EEPROM: Wczytywanie stanu przekaźników -----");
-  addDebugLog("Adres EEPROM: 0x" + String(addr, HEX));
-  addDebugLog("Rozmiar EEPROM: " + String(EEPROM_SIZE) + " bajtów");
-  addDebugLog("Liczba przekaźników: " + String(NUM_RELAYS));
-
-  // Wyświetl pierwsze 16 bajtów EEPROM w celach diagnostycznych
-  String firstBytes = "Pierwsze 16 bajtów EEPROM: ";
-  for (int i = 0; i < 16 && i < EEPROM_SIZE; i++)
-  {
-    byte value = EEPROM.read(i);
-    firstBytes += "0x";
-    if (value < 16)
-      firstBytes += "0";
-    firstBytes += String(value, HEX) + " ";
-  }
-  addDebugLog(firstBytes);
 
   // Inicjalizuj wszystkie przekaźniki do stanu domyślnego
-  for (int i = 0; i < NUM_RELAYS; i++)
-  {
+  for (int i = 0; i < NUM_RELAYS; i++) {
     relayStates[i].isOn = false;
     relayStates[i].isAuto = true;
+    relayStates[i].name = relayNames[i];
     relayStates[i].linkedSensor = "";
+    relayStates[i].isForcedByThermostat = false;
   }
 
   // Próba odczytu danych z EEPROM
-  for (int i = 0; i < NUM_RELAYS; i++)
-  {
-    addDebugLog("\n--- Przekaźnik " + String(i) + " (adres: 0x" + String(addr, HEX) + ") ---");
-
-    if (addr + 2 >= EEPROM_SIZE)
-    {
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    if (addr + 3 >= EEPROM_SIZE) {
       addDebugLog("BŁĄD: Brak miejsca w EEPROM dla przekaźnika " + String(i));
       break;
     }
 
-    byte isOnByte = EEPROM.read(addr);
-    byte isAutoByte = EEPROM.read(addr + 1);
-
-    String stateInfo = "Stan (bajt): 0x" + String(isOnByte, HEX) + 
-                      ", Auto (bajt): 0x" + String(isAutoByte, HEX);
-    addDebugLog(stateInfo);
-
-    if (isOnByte > 1 || isAutoByte > 1)
-    {
-      addDebugLog("UWAGA: Nieprawidłowe wartości stanu przekaźnika, używam domyślnych");
-      addr += 2;
+    // Odczytaj stan podstawowy
+    relayStates[i].isOn = EEPROM.read(addr++) == 1;
+    relayStates[i].isAuto = EEPROM.read(addr++) == 1;
+    
+    // Odczytaj długość nazwy
+    byte nameLength = EEPROM.read(addr++);
+    if (nameLength > MAX_NAME_LENGTH) {
+      addDebugLog("BŁĄD: Nieprawidłowa długość nazwy");
       continue;
     }
-
-    relayStates[i].isOn = isOnByte == 1;
-    relayStates[i].isAuto = isAutoByte == 1;
-    addr += 2;
-
-    if (addr >= EEPROM_SIZE)
-    {
-      addDebugLog("BŁĄD: Brak danych o długości nazwy czujnika");
+    
+    // Odczytaj nazwę
+    if (addr + nameLength > EEPROM_SIZE) {
+      addDebugLog("BŁĄD: Brak pełnych danych nazwy");
       continue;
     }
-
-    byte sensorNameLength = EEPROM.read(addr++);
-    String sensorLengthInfo = "Długość nazwy czujnika (bajt): 0x" + 
-                            String(sensorNameLength, HEX) + 
-                            " (" + String(sensorNameLength) + " znaków)";
-    addDebugLog(sensorLengthInfo);
-
-    if (sensorNameLength > MAX_SENSOR_NAME || sensorNameLength == 0)
-    {
-      addDebugLog("BŁĄD: Nieprawidłowa długość nazwy czujnika");
-      continue;
+    
+    char name[MAX_NAME_LENGTH + 1] = {0};
+    for (int j = 0; j < nameLength; j++) {
+      name[j] = EEPROM.read(addr++);
     }
+    relayStates[i].name = String(name);
 
-    if (addr + sensorNameLength > EEPROM_SIZE)
-    {
-      addDebugLog("BŁĄD: Brak pełnych danych nazwy czujnika");
-      continue;
-    }
-
-    char sensorName[MAX_SENSOR_NAME + 1] = {0};
-
-    String sensorData = "Dane nazwy czujnika (hex): ";
-    for (int j = 0; j < sensorNameLength && j < MAX_SENSOR_NAME; j++)
-    {
-      byte charValue = EEPROM.read(addr + j);
-      sensorData += "0x";
-      if (charValue < 16)
-        sensorData += "0";
-      sensorData += String(charValue, HEX) + " ";
-
-      if (charValue >= 32 && charValue <= 126)
-      {
-        sensorName[j] = (char)charValue;
-      }
-      else
-      {
-        addDebugLog("UWAGA: Wykryto nieprawidłowy znak ASCII: " + String(charValue));
-        sensorName[j] = '_';
-      }
-    }
-    addDebugLog(sensorData);
-
-    addr += sensorNameLength;
-    relayStates[i].linkedSensor = String(sensorName);
-
-    ExpOutput->digitalWrite(relayPins[i], relayStates[i].isOn ? LOW : HIGH);
+    // Ustaw stan fizyczny przekaźnika
+    ExpOutput.digitalWrite(relayPins[i], relayStates[i].isOn ? LOW : HIGH);
 
     String relaySummary = "PODSUMOWANIE przekaźnika " + String(i) + ":\n" +
+                         "  - Nazwa: " + relayStates[i].name + "\n" +
                          "  - Stan: " + String(relayStates[i].isOn ? "WŁĄCZONY" : "WYŁĄCZONY") + "\n" +
                          "  - Tryb: " + String(relayStates[i].isAuto ? "AUTOMATYCZNY" : "RĘCZNY") + "\n" +
-                         "  - Czujnik: '" + relayStates[i].linkedSensor + "'";
+                         "  - Adres EEPROM: " + String(addr - nameLength - 3);
     addDebugLog(relaySummary);
 
     yield();
   }
 
   addDebugLog("\n----- EEPROM: Zakończono wczytywanie stanu -----");
-
-  if (addr < 6)
-  {
-    addDebugLog("UWAGA: Wykryto problemy z danymi EEPROM, inicjalizuję domyślnymi wartościami");
-    for (int i = 0; i < NUM_RELAYS; i++)
-    {
-      relayStates[i].isOn = false;
-      relayStates[i].isAuto = true;
-      relayStates[i].linkedSensor = "";
-      ExpOutput->digitalWrite(relayPins[i], HIGH);
-    }
-    saveState();
-  }
+  
+  // Wyślij pełny stan po załadowaniu
+  sendRelayStates();
 }
 
 // Dodaj po deklaracji iotWebConf
@@ -608,17 +433,44 @@ void configSaved()
   addDebugLog("Configuration was updated");
 }
 
+void readConfigFile() {
+  // Tworzymy JSON w pamięci
+  StaticJsonDocument<1024> doc;
+  
+  // Tworzymy strukturę JSON
+  JsonObject iwcAll = doc.createNestedObject("iwcAll");
+  JsonObject iwcSys = iwcAll.createNestedObject("iwcSys");
+  
+  // Ustawiamy wartości
+  iwcSys["iwcThingName"] = thingName;
+  iwcSys["iwcApPassword"] = wifiInitialApPassword;
+  iwcSys["iwcApTimeout"] = "40";
+  
+  // Konfiguracja WiFi
+  JsonObject iwcWifi0 = iwcSys.createNestedObject("iwcWifi0");
+  iwcWifi0["iwcWifiSsid"] = iwcWifiSsid;
+  iwcWifi0["iwcWifiPassword"] = iwcWifiPassword;
+  JsonObject documentRoot = doc.as<JsonObject>();
+  
+  // Aplikujemy konfigurację
+  iotWebConf.getRootParameterGroup()->loadFromJson(documentRoot);
+  iotWebConf.saveConfig();
+  
+  addDebugLog("Konfiguracja została załadowana z pamięci");
+}
+
 void setup()
 {
   Serial.begin(9600);
-  addDebugLog("Starting up...");
+  addDebugLog("Starting / Reading config file");
   
+  readConfigFile();
   // Inicjalizacja I2C
   Wire.begin();
   addDebugLog("I2C zainicjalizowany");
   
-  // Skanowanie urządzeń I2C
-  scanI2CDevices();
+ 
+
   
   pinMode(CONFIG_PIN, INPUT_PULLUP);
   addDebugLog("Config pin initialized");
@@ -650,9 +502,13 @@ void setup()
   addDebugLog("Initializing IotWebConf...");
   iotWebConf.init();
 
+  
+
   server.on("/", handleRoot);
   server.on("/config", []{ iotWebConf.handleConfig(); });
   server.onNotFound([](){ iotWebConf.handleNotFound(); });
+  server.on("/options", HTTP_OPTIONS, handleOptions); // Dodajemy obsługę OPTIONS
+  
   addDebugLog("Web server routes configured");
 
   server.begin();
@@ -720,15 +576,8 @@ void loop()
       addDebugLog("Low memory: " + String(ESP.getFreeHeap()));
     }
 
-    // Dodaj yield() w długich operacjach
-    //  yield(); // Pozwól watchdogowi się zresetować
-
-    // Dodaj to w głównej pętli
-    if (millis() - lastSaveTime >= SAVE_INTERVAL)
-    {
-      saveState();
-      lastSaveTime = millis();
-    }
+    checkThermostatInputs(); // Dodaj sprawdzanie stanów termostatów
+    
     manifoldLogic();
 
     webSocket.loop();
@@ -744,11 +593,59 @@ void loop()
   ArduinoOTA.handle();
 }
 
-// Zmodyfikuj funkcję obsługującą zmianę stanu przekaźnika
-void handleRelay(int relayIndex, bool state)
+// Obsługa eventow Websocket
+void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
-  ExpOutput->digitalWrite(relayPins[relayIndex], state ? LOW : HIGH);
-  relayStates[relayIndex].isOn = state;
-  // Opcjonalnie możesz tu dodać natychmiastowy zapis stanu
-  // saveState();
+  switch (type)
+  {
+  case WStype_DISCONNECTED:
+    addDebugLog("Client disconnected from WebSocket");
+    break;
+  case WStype_CONNECTED:
+  {
+    addDebugLog("New client connected to WebSocket");
+    // Wyślij pełny stan przekaźników
+    sendRelayStates();
+    // Wyślij zebrane logi
+    sendDebugLogs();
+  }
+  break;
+  case WStype_TEXT:
+  {
+    StaticJsonDocument<2048> docInput;
+    String messageText = String((char *)payload).substring(0, length);
+    addDebugLog("Otrzymano wiadomość: " + messageText);
+    
+    DeserializationError error = deserializeJson(docInput, messageText);
+    if (error) {
+      addDebugLog("Błąd parsowania JSON: " + String(error.c_str()));
+      return;
+    }
+
+    // Sprawdź typ wiadomości
+    if (docInput["type"] == "command") {
+      if (docInput["action"] == "toggleRelay") {
+        int relayId = docInput["relayId"];
+        if (relayId >= 0 && relayId < NUM_RELAYS) {
+          bool newState = !relayStates[relayId].isOn;
+          updateRelayState(relayId, newState);
+          addDebugLog("Przełączono przekaźnik " + String(relayId) + " na " + (newState ? "ON" : "OFF"));
+        }
+      }
+    }
+    // Obsługa starego formatu dla kompatybilności
+    else if (docInput["pin"]) {
+      String pinStr = docInput["pin"];
+      if (pinStr.startsWith("pin_")) {
+        int relayId = pinStr.substring(4).toInt();
+        if (relayId >= 0 && relayId < NUM_RELAYS) {
+          bool newState = docInput["state"] == "ON";
+          updateRelayState(relayId, newState);
+          addDebugLog("Przełączono przekaźnik " + String(relayId) + " na " + (newState ? "ON" : "OFF"));
+        }
+      }
+    }
+  }
+  break;
+  }
 }

@@ -1,0 +1,13 @@
+{
+    "iwcAll": {
+        "iwcSys": {
+            "iwcThingName": "netatmoRelay",
+            "iwcApPassword": "pmgana921",
+            "iwcApTimeout": "40",
+            "iwcWifi0": {
+                "iwcWifiSsid": "oooooio",
+                "iwcWifiPassword": "pmgana921"
+            }
+        }
+    }
+}

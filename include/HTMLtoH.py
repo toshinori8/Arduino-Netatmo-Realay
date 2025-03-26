@@ -7,7 +7,7 @@ current_directory = os.getcwd()
 input_file_path = os.path.join(current_directory, "include", "index.html")
 output_file_path = os.path.join(current_directory, "include", "webPage.h")
 
-css_files = ["style.css", "weather.css", "qr_code.css"]
+css_files = ["style.css"]
 js_files = ["app.js", "weather.js", "qr_code.js"]  # Dodaj nazwy plików JS
 
 
