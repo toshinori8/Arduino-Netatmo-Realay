@@ -1,9 +1,0 @@
-{
-  "homeId": "5d152eb3e0c2b1000a44fb6a",
-  "clientId": "639e1b5f4fdefadabd00613c",
-  "clientSecret": "WpXK2jPXAgsRc8SL8ggzJB6yzKGMOiWDqfHgodR",
-  "testUsername": "zbigniew.karski@gmail.com",
-  "testPassword": "Q6CEsg6e9bb2@",
-  "apiUrl": "https://api.netatmo.com",
-  "tokenUrl": "https://api.netatmo.com/oauth2/token"
-}

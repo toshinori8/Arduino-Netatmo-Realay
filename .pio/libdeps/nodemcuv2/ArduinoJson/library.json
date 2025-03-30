@@ -7,14 +7,15 @@
     "type": "git",
     "url": "https://github.com/bblanchon/ArduinoJson.git"
   },
-  "version": "6.21.5",
+  "version": "6.19.4",
   "authors": {
     "name": "Benoit Blanchon",
     "url": "https://blog.benoitblanchon.fr"
   },
-  "export": {
-    "include": ["src", "examples", "LICENSE.txt", "ArduinoJson.h"]
-  },
+  "exclude": [
+    ".github",
+    "extras"
+  ],
   "frameworks": "*",
   "platforms": "*",
   "build": {

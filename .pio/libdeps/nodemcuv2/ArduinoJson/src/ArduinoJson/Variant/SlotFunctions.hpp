@@ -1,5 +1,5 @@
 // ArduinoJson - https://arduinojson.org
-// Copyright © 2014-2023, Benoit BLANCHON
+// Copyright © 2014-2022, Benoit BLANCHON
 // MIT License
 
 #pragma once
@@ -7,27 +7,28 @@
 #include <ArduinoJson/Polyfills/assert.hpp>
 #include <ArduinoJson/Variant/VariantData.hpp>
 
-ARDUINOJSON_BEGIN_PRIVATE_NAMESPACE
+namespace ARDUINOJSON_NAMESPACE {
 
 struct SlotKeySetter {
-  SlotKeySetter(VariantSlot* instance) : instance_(instance) {}
+  SlotKeySetter(VariantSlot* instance) : _instance(instance) {}
 
   template <typename TStoredString>
   void operator()(TStoredString s) {
     if (!s)
       return;
-    ARDUINOJSON_ASSERT(instance_ != 0);
-    instance_->setKey(s);
+    ARDUINOJSON_ASSERT(_instance != 0);
+    _instance->setKey(s);
   }
 
-  VariantSlot* instance_;
+  VariantSlot* _instance;
 };
 
-template <typename TAdaptedString>
-inline bool slotSetKey(VariantSlot* var, TAdaptedString key, MemoryPool* pool) {
+template <typename TAdaptedString, typename TStoragePolicy>
+inline bool slotSetKey(VariantSlot* var, TAdaptedString key, MemoryPool* pool,
+                       TStoragePolicy storage) {
   if (!var)
     return false;
-  return storeString(pool, key, SlotKeySetter(var));
+  return storage.store(key, pool, SlotKeySetter(var));
 }
 
 inline size_t slotSize(const VariantSlot* var) {
@@ -42,4 +43,4 @@ inline size_t slotSize(const VariantSlot* var) {
 inline VariantData* slotData(VariantSlot* slot) {
   return reinterpret_cast<VariantData*>(slot);
 }
-ARDUINOJSON_END_PRIVATE_NAMESPACE
+}  // namespace ARDUINOJSON_NAMESPACE

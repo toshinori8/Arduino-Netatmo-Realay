@@ -1,5 +1,5 @@
 // ArduinoJson - https://arduinojson.org
-// Copyright © 2014-2023, Benoit BLANCHON
+// Copyright © 2014-2022, Benoit BLANCHON
 // MIT License
 
 #pragma once
@@ -8,45 +8,39 @@
 #include <string.h>  // strcmp
 
 #include <ArduinoJson/Polyfills/assert.hpp>
-#include <ArduinoJson/Polyfills/attributes.hpp>
-#include <ArduinoJson/Strings/StoragePolicy.hpp>
-#include <ArduinoJson/Strings/StringAdapter.hpp>
+#include <ArduinoJson/Strings/IsString.hpp>
 
-ARDUINOJSON_BEGIN_PRIVATE_NAMESPACE
-
-template <typename T>
-struct IsChar
-    : integral_constant<bool, is_integral<T>::value && sizeof(T) == 1> {};
+namespace ARDUINOJSON_NAMESPACE {
 
 class ZeroTerminatedRamString {
  public:
   static const size_t typeSortKey = 3;
 
-  ZeroTerminatedRamString(const char* str) : str_(str) {}
+  ZeroTerminatedRamString(const char* str) : _str(str) {}
 
   bool isNull() const {
-    return !str_;
+    return !_str;
   }
 
-  FORCE_INLINE size_t size() const {
-    return str_ ? ::strlen(str_) : 0;
+  size_t size() const {
+    return _str ? ::strlen(_str) : 0;
   }
 
   char operator[](size_t i) const {
-    ARDUINOJSON_ASSERT(str_ != 0);
+    ARDUINOJSON_ASSERT(_str != 0);
     ARDUINOJSON_ASSERT(i <= size());
-    return str_[i];
+    return _str[i];
   }
 
   const char* data() const {
-    return str_;
+    return _str;
   }
 
   friend int stringCompare(ZeroTerminatedRamString a,
                            ZeroTerminatedRamString b) {
     ARDUINOJSON_ASSERT(!a.isNull());
     ARDUINOJSON_ASSERT(!b.isNull());
-    return ::strcmp(a.str_, b.str_);
+    return ::strcmp(a._str, b._str);
   }
 
   friend bool stringEquals(ZeroTerminatedRamString a,
@@ -54,91 +48,72 @@ class ZeroTerminatedRamString {
     return stringCompare(a, b) == 0;
   }
 
-  StringStoragePolicy::Copy storagePolicy() const {
-    return StringStoragePolicy::Copy();
-  }
-
  protected:
-  const char* str_;
-};
-
-template <typename TChar>
-struct StringAdapter<TChar*, typename enable_if<IsChar<TChar>::value>::type> {
-  typedef ZeroTerminatedRamString AdaptedString;
-
-  static AdaptedString adapt(const TChar* p) {
-    return AdaptedString(reinterpret_cast<const char*>(p));
-  }
-};
-
-template <typename TChar, size_t N>
-struct StringAdapter<TChar[N], typename enable_if<IsChar<TChar>::value>::type> {
-  typedef ZeroTerminatedRamString AdaptedString;
-
-  static AdaptedString adapt(const TChar* p) {
-    return AdaptedString(reinterpret_cast<const char*>(p));
-  }
-};
-
-class StaticStringAdapter : public ZeroTerminatedRamString {
- public:
-  StaticStringAdapter(const char* str) : ZeroTerminatedRamString(str) {}
-
-  StringStoragePolicy::Link storagePolicy() const {
-    return StringStoragePolicy::Link();
-  }
+  const char* _str;
 };
 
 template <>
-struct StringAdapter<const char*, void> {
-  typedef StaticStringAdapter AdaptedString;
+struct IsString<char*> : true_type {};
 
-  static AdaptedString adapt(const char* p) {
-    return AdaptedString(p);
-  }
-};
+inline ZeroTerminatedRamString adaptString(const char* s) {
+  return ZeroTerminatedRamString(s);
+}
+
+template <>
+struct IsString<unsigned char*> : true_type {};
+
+inline ZeroTerminatedRamString adaptString(const unsigned char* s) {
+  return adaptString(reinterpret_cast<const char*>(s));
+}
+
+template <>
+struct IsString<signed char*> : true_type {};
+
+inline ZeroTerminatedRamString adaptString(const signed char* s) {
+  return adaptString(reinterpret_cast<const char*>(s));
+}
 
 class SizedRamString {
  public:
   static const size_t typeSortKey = 2;
 
-  SizedRamString(const char* str, size_t sz) : str_(str), size_(sz) {}
+  SizedRamString(const char* str, size_t sz) : _str(str), _size(sz) {}
 
   bool isNull() const {
-    return !str_;
+    return !_str;
   }
 
   size_t size() const {
-    return size_;
+    return _size;
   }
 
   char operator[](size_t i) const {
-    ARDUINOJSON_ASSERT(str_ != 0);
+    ARDUINOJSON_ASSERT(_str != 0);
     ARDUINOJSON_ASSERT(i <= size());
-    return str_[i];
+    return _str[i];
   }
 
   const char* data() const {
-    return str_;
-  }
-
-  StringStoragePolicy::Copy storagePolicy() const {
-    return StringStoragePolicy::Copy();
+    return _str;
   }
 
  protected:
-  const char* str_;
-  size_t size_;
+  const char* _str;
+  size_t _size;
 };
 
-template <typename TChar>
-struct SizedStringAdapter<TChar*,
-                          typename enable_if<IsChar<TChar>::value>::type> {
-  typedef SizedRamString AdaptedString;
+inline SizedRamString adaptString(const char* s, size_t n) {
+  return SizedRamString(s, n);
+}
 
-  static AdaptedString adapt(const TChar* p, size_t n) {
-    return AdaptedString(reinterpret_cast<const char*>(p), n);
-  }
-};
+template <size_t N>
+struct IsString<char[N]> : true_type {};
 
-ARDUINOJSON_END_PRIVATE_NAMESPACE
+template <size_t N>
+struct IsString<const char[N]> : true_type {};
+
+template <size_t N>
+inline SizedRamString adaptString(char s[N]) {
+  return SizedRamString(s, strlen(s));
+}
+}  // namespace ARDUINOJSON_NAMESPACE
