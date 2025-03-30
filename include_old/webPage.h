@@ -115,41 +115,21 @@ body::before {
 
 body.orange::before {
   content: "";
-
   background: rgba(255, 174, 0, 1.000);
-  position: absolute;
+  position: fixed;
   top: 0px;
   right: 0px;
-  bottom: 0px;
-  left: 0px;
+  /* bottom: 0px; */
+  /* left: 0px; */
+  width: 100%;
   opacity: 1;
   transition: all ease 0.5s;
-  background-image: -webkit-linear-gradient(#fd8000,
-      #fe8a00 20%,
-      #fe9300 40%,
-      #ff9c00 60%,
-      orange 80%,
-      #ffae00);
-  background-image: -moz-linear-gradient(#fd8000,
-      #fe8a00 20%,
-      #fe9300 40%,
-      #ff9c00 60%,
-      orange 80%,
-      #ffae00);
-  background-image: -o-linear-gradient(#fd8000,
-      #fe8a00 20%,
-      #fe9300 40%,
-      #ff9c00 60%,
-      orange 80%,
-      #ffae00);
-  background-image: linear-gradient(#fd8000,
-      #fe8a00 20%,
-      #fe9300 40%,
-      #ff9c00 60%,
-      orange 80%,
-      #ffae00);
-
+  background-image: -webkit-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
+  background-image: -moz-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
+  background-image: -o-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
+  background-image: linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
   background-position: 100px;
+  height: 100%;
 }
 
 body.connected {
@@ -174,7 +154,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  margin: 120px !important;
+
 }
 
 
@@ -447,7 +427,7 @@ footer a.usegaz svg {
 }
 
 body {
-  margin-top: 120px;
+  
 }
 
 .containerouter {
@@ -469,8 +449,9 @@ body {
 
 @media (max-height: 980px) {
   .containerouter {
-    margin-top: 40px;
-    scale: 60%;
+    margin-top: 6px;
+    scale: 85%;
+    box-shadow: 3px 8px 82px 64px rgba(0, 0, 0, 0.2);
 
   }
 }
@@ -1083,10 +1064,11 @@ function showAlert(message, type = 'info') {
 // Funkcja do aktualizacji stanu przekaźników
 function updateRelayStates(relays) {
 
-  console.log(relays);
   
   if (relays && Array.isArray(relays)) {
     relays.forEach((relay, index) => {
+
+      console.log(index);
       const element = document.getElementById(`pin_${index}`);
       if (element && element.type === "checkbox") {
         // Aktualizuj stan checkboxa
@@ -1098,12 +1080,7 @@ function updateRelayStates(relays) {
           handIcon.classList.remove("disabled");
           handIcon.classList.toggle("enabled", relay.isOn);
         }
-        
-        // Aktualizuj nazwę pokoju
-        // const roomName = element.closest('.relay-item').querySelector('h3');
-        // if (roomName && relay.name) {
-        //   roomName.textContent = relay.name;
-        // }
+      
       }
     });
 
