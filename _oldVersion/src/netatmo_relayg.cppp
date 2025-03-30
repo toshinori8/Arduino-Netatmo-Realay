@@ -4,46 +4,28 @@
 #include <Wire.h>
 #include "Timers.h"
 #include <ArduinoJson.h>
-#include <ESP8266WiFi.h>
-#include <espnow.h>
-#include <ESP8266WebServer.h>
-#include <WebSocketsServer.h>
-#include <IotWebConf.h>
-
-#ifndef IOTWEBCONF_ENABLE_JSON
-# error platformio.ini must contain "build_flags = -DIOTWEBCONF_ENABLE_JSON"
-#endif
-
 StaticJsonDocument<8192> docPins;
 StaticJsonDocument<1124> docRooms;
-StaticJsonDocument<200> docInput;
 
-#include <functional>
-#include <webPage.h>
-#include <roomManager.h>
+#include <ESP8266WiFi.h>
+#include <espnow.h>
 #include <now.h>
+#include <ESP8266WebServer.h>
+#include <webPage.h>
+#include <WebSocketsServer.h>
+#include <functional>
+#include <IotWebConf.h>
+#include <roomManager.h>
 
-
-void readConfigFile();
-
-
-
-
-
-const char thingName[] = "netatmo_relay";
+bool useGaz_ = true; // use gas? button on webPage
+const char thingName[] = "netatmo_relay1";
 const char wifiInitialApPassword[] = "12345678";
-// Dodaj domyślną konfigurację WiFi
-const char iwcWifiSsid[] = "oooooio";
-const char iwcWifiPassword[] = "pmgana921";
-
-
 void handleRoot();
 
 String forced;
 String woodStove;
 String state;
 String pin;
-bool useGaz_ = true; // use gas? button on webPage
 unsigned long lastSendTime = 0;
 unsigned long previousMillis = 0; // Variable to store the previous time
 // const long interval = 480 * 60 * 1000; // Interval at which to reset the NodeMCU
@@ -168,7 +150,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   break;
   case WStype_TEXT:
   {
-    
+    StaticJsonDocument<200> docInput;
     // handle incoming text message from client
     String messageText = String((char *)payload).substring(0, length);
     Serial.println("Message from client: " + messageText);
@@ -332,7 +314,7 @@ void setup()
 
   // -- Initializing the configuration.
   iotWebConf.init();
-  iotWebConf.setApTimeoutMs(0);
+  iotWebConf.setApTimeoutMs(5000);
   // -- Set up required URL handlers on the web server.
   server.on("/", handleRoot);
   server.on("/config", []
@@ -423,18 +405,18 @@ void manifoldLogic()
   // check woodStove init input
 
   // Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
-  // if (String(ExpInput.digitalRead(P6)) == "true")
-  // {
+  if (String(ExpInput.digitalRead(P6)) == "true")
+  {
 
-  //   // Serial.println("WoodStove operating ");
-  //   docPins["WoodStove"] = "on";
-  // }
-  // if (String(ExpInput.digitalRead(P6)) == "false")
-  // {
+    // Serial.println("WoodStove operating ");
+    docPins["WoodStove"] = "on";
+  }
+  if (String(ExpInput.digitalRead(P6)) == "false")
+  {
 
-  //   // Serial.println("WoodStove off ");
-  //   docPins["WoodStove"] = "off";
-  // }
+    // Serial.println("WoodStove off ");
+    docPins["WoodStove"] = "off";
+  }
 
   if (anyForcedON == 1)
   {

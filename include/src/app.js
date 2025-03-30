@@ -468,7 +468,7 @@ const wsStatusElement = document.getElementById("ws-status");
 
 function connectWebSocket() {
   //  ws = new WebSocket("ws://192.168.8.47:81");
-  ws = new WebSocket("ws://netatmo_relay1.local:81");
+  ws = new WebSocket("ws://netatmo_relay.local:81");
   ws.onopen = function (event) {
     console.log("WebSocket connection opened:", event);
     wsStatusElement.classList.add("connected");
