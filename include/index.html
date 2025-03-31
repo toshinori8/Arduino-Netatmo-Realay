@@ -96,8 +96,8 @@
       </div>
 
       <footer>
-        <button id="configButton">Konfiguracja pinów</button>
-        <a href="#" class="noselect">
+       
+        <a href="#" class="noselect configButton">
           <div class="icon-inner">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -311,9 +311,34 @@
         <span class="close no-select">&times;</span>
         <h2 class="no-select">Konfiguracja</h2>
         <br/>
+
+        <!-- Zakładki -->
+        <div class="config-tabs">
+          <button class="tab-button active" data-tab="rooms">POKOJE</button>
+          <button class="tab-button" data-tab="settings">USTAWIENIA</button>
+        </div>
+
         <hr/>
         <br/>
-        <div id="roomList"></div>
+
+        <!-- Zawartość zakładki POKOJE -->
+        <div class="tab-content" id="rooms-tab">
+          <div id="roomList"></div>
+        </div>
+
+        <!-- Zawartość zakładki USTAWIENIA -->
+        <div class="tab-content" id="settings-tab" style="display: none;">
+          <div class="settings-container">
+            <h3>Ustawienia ogólne</h3>
+            <div class="setting-item">
+              <label>Tryb pracy:</label>
+              <select id="workMode">
+                <option value="auto">Automatyczny</option>
+                <option value="manual">Manualny</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
         <br/>
         <hr/>

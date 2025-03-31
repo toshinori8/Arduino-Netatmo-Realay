@@ -920,6 +920,58 @@ loader.loader {
   align-items: center;
 }
 
+/* Style dla zakładek */
+.config-tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 15px;
+}
+
+.tab-button {
+  padding: 8px 15px;
+  margin: 0 5px;
+  border: none;
+  background-color: #f0f0f0;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tab-button.active {
+  background-color: #474E65;
+  color: white;
+}
+
+.tab-content {
+  transition: all 0.3s ease;
+}
+
+/* Style dla edycji pokoi */
+#roomList .room-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+#roomList .room-item input[type="text"] {
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-right: 10px;
+  width: 40%;
+}
+
+#roomList .room-item select {
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 30%;
+}
+
 .modal-content {
     -webkit-box-shadow: 0px 0px 73px 15px rgba(66, 68, 90, 0.44);
     -moz-box-shadow: 0px 0px 73px 15px rgba(66, 68, 90, 0.44);
@@ -1076,8 +1128,8 @@ button {
       </div>
 
       <footer>
-        <button id="configButton">Konfiguracja pinów</button>
-        <a href="#" class="noselect">
+       
+        <a href="#" class="noselect configButton">
           <div class="icon-inner">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1291,9 +1343,34 @@ button {
         <span class="close no-select">&times;</span>
         <h2 class="no-select">Konfiguracja</h2>
         <br/>
+
+        <!-- Zakładki -->
+        <div class="config-tabs">
+          <button class="tab-button active" data-tab="rooms">POKOJE</button>
+          <button class="tab-button" data-tab="settings">USTAWIENIA</button>
+        </div>
+
         <hr/>
         <br/>
-        <div id="roomList"></div>
+
+        <!-- Zawartość zakładki POKOJE -->
+        <div class="tab-content" id="rooms-tab">
+          <div id="roomList"></div>
+        </div>
+
+        <!-- Zawartość zakładki USTAWIENIA -->
+        <div class="tab-content" id="settings-tab" style="display: none;">
+          <div class="settings-container">
+            <h3>Ustawienia ogólne</h3>
+            <div class="setting-item">
+              <label>Tryb pracy:</label>
+              <select id="workMode">
+                <option value="auto">Automatyczny</option>
+                <option value="manual">Manualny</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
         <br/>
         <hr/>

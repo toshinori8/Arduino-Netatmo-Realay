@@ -1,4 +1,16 @@
 class Room {
+   /**
+   * @param {string} id
+   * @param {string} name
+   * @param {number} currentTemperature
+   * @param {number} targetTemperature
+   * @param {boolean} forced
+   * @param {string} battery_level
+   * @param {string} battery_state
+   * @param {number} priority
+   * @param {boolean} valve
+   * @param {number} pinNumber
+   */
   constructor(
     id,
     name,
@@ -6,7 +18,10 @@ class Room {
     targetTemperature,
     forced,
     battery_level,
-    battery_state
+    battery_state,
+    priority = 0,
+    valve = false,
+    pinNumber = 0
   ) {
     this.id = id;
     this.name = name;
@@ -15,15 +30,36 @@ class Room {
     this.forced = forced;
     this.battery_state = battery_state;
     this.battery_level = battery_level;
+    this.priority = priority;
+    this.valve = valve;
+    this.pinNumber = pinNumber;
     this.element = this.createElement();
   }
 
   createElement() {
-
+    // Dodajemy style dla valve-indicator jeśli jeszcze nie istnieją
+    if (!document.getElementById('valve-indicator-style')) {
+      const style = document.createElement('style');
+      style.id = 'valve-indicator-style';
+      style.textContent = `
+        .valve-indicator {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #00a2ff;
+          position: absolute;
+          top: 184px;
+          right: 40px;
+          animation: pulse 0.9s infinite;
+        }
+      `;
+      document.head.appendChild(style);
+    }
 
     const card = document.createElement("div");
     card.classList.add("thermostat-card");
     card.dataset.id = this.id;
+    card.dataset.pin = this.pinNumber;
 
     const backButton = document.createElement("button");
     backButton.classList.add("back-button");
@@ -105,9 +141,10 @@ class Room {
     slider.classList.add("temperature-slider");
     slider.min = 2;
     slider.max = 30;
-    slider.step = 0.5;
+    slider.step = 0.2;
     slider.value = this.targetTemperature;
     slider.addEventListener("input", (e) => {
+      
       targetTemp.querySelector(
         ".temperature-value"
       ).textContent = `${parseFloat(e.target.value).toFixed(1)}°`;
@@ -115,25 +152,42 @@ class Room {
       this.updateHeatingIndicator();
     });
     slider.addEventListener("mouseup", () => {
-      this.sendCommand("act_temperature");
+      this.sendCommand("act_temperature", );
     });
 
     controls.appendChild(slider);
     const batteryIndicator = this.createBatteryIndicator();
+
+    // Create priority display
+    const priorityDisplay = document.createElement("p");
+    priorityDisplay.classList.add("priority-display");
+    priorityDisplay.textContent = `Priority: ${this.priority}`;
+    priorityDisplay.style.fontSize = "20px";
+    priorityDisplay.style.color = "#666";
+    priorityDisplay.style.marginTop = "-28px";
+    priorityDisplay.style.textAlign = "center";
 
     card.appendChild(backButton);
     card.appendChild(title);
     card.appendChild(temperatures);
     card.appendChild(quickActions);
     card.appendChild(controls);
+    card.appendChild(priorityDisplay);
     card.appendChild(batteryIndicator);
 
     this.element = card; // Ensure this.element is assigned before calling updateHeatingIndicator
     this.updateHeatingIndicator();
+    this.updateValveIndicator();
+
 
     card.addEventListener("click", (e) => {
       if (e.target.closest(".action-button") || e.target === backButton) return;
-      if (!card.classList.contains("expanded")) {
+      if (card.classList.contains("expanded")) {
+        // Jeśli karta jest już rozwinięta, usuń klasę expanded
+        card.classList.remove("expanded");
+        document.body.style.overflow = "auto";
+      } else {
+        // Jeśli karta nie jest rozwinięta, rozwiń ją
         document
           .querySelectorAll(".thermostat-card.expanded")
           .forEach((expandedCard) => {
@@ -331,6 +385,23 @@ class Room {
     }
   }
 
+  updateValveIndicator() {
+    if (this.valve) {
+      this.element.dataset.valve = "true";
+      if (!this.element.querySelector(".valve-indicator")) {
+        const indicator = document.createElement("div");
+        indicator.classList.add("valve-indicator");
+        this.element.appendChild(indicator);
+      }
+    } else {
+      this.element.dataset.valve = "false";
+      const indicator = this.element.querySelector(".valve-indicator");
+      if (indicator) {
+        indicator.remove();
+      }
+    }
+  }
+
   closeCard() {
     this.element.classList.remove("expanded");
     document.body.style.overflow = "auto";
@@ -340,9 +411,12 @@ class Room {
     const message = {
       id: this.id,
       command: command,
-      targetTemperature: this.targetTemperature,
+      targetTemperature: parseFloat(this.targetTemperature).toFixed(1),
       forced: this.forced,
+      priority: this.priority
     };
+
+    console.log(message);
     ws.send(JSON.stringify(message));
   }
 
@@ -351,13 +425,30 @@ class Room {
     this.targetTemperature = data.targetTemperature;
     this.forced = data.forced;
     this.battery_state = data.battery_state;
+    this.priority = data.priority || this.priority; // Update priority if available
+    this.valve = data.valve || false; // Update valve status if available
+    this.pinNumber = data.pinNumber || this.pinNumber; // Update pin number if available
+
     this.element.querySelector(
       ".temperature:nth-child(1) .temperature-value"
     ).textContent = `${this.currentTemperature.toFixed(1)}°`;
     this.element.querySelector(
       ".temperature:nth-child(2) .temperature-value"
     ).textContent = `${this.targetTemperature.toFixed(1)}°`;
+
+    // Update priority display
+    const priorityDisplay = this.element.querySelector(".priority-display");
+    if (priorityDisplay) {
+      priorityDisplay.textContent = `Priority: ${this.priority}`;
+    }
+
+    // Update data attributes
+    this.element.dataset.pin = this.pinNumber;
+    this.element.dataset.id = this.id;
+    this.element.dataset.forced = this.forced;
+
     this.updateHeatingIndicator();
+    this.updateValveIndicator();
     this.updateBatteryIndicator(
       this.element.querySelector(".battery_indicator")
     );
@@ -404,7 +495,10 @@ function handleWebSocketMessage(data) {
           room.targetTemperature,
           room.forced,
           room.battery_level,
-          room.battery_state
+          room.battery_state,
+          room.priority,
+          room.valve,
+          room.pinNumber
         );
         rooms[room.id] = newRoom;
         if (thermostatList) {
@@ -428,10 +522,11 @@ function handleWebSocketMessage(data) {
 
     parsedData.rooms.forEach(room => {
       const div = document.createElement("div");
+      div.className = "room-item";
       div.innerHTML = `
-        <label>${room.name}</label>
-        <select data-room-id="${room.id}">
-          ${Array.from({length: 54}, (_, i) => 
+        <input type="text" class="room-name" value="${room.name}" data-room-id="${room.id}" placeholder="Nazwa pokoju">
+        <select class="room-pin" data-room-id="${room.id}">
+          ${Array.from({length: 54}, (_, i) =>
             `<option value="${i}" ${room.pin === i ? 'selected' : ''}">Pin ${i}</option>`
           ).join('')}
         </select>
@@ -445,10 +540,11 @@ function handleWebSocketMessage(data) {
 
     parsedData.pinMappings.forEach(mapping => {
       const div = document.createElement("div");
+      div.className = "room-item";
       div.innerHTML = `
-        <label>${mapping.name}</label>
-        <select data-room-id="${mapping.roomId}">
-          ${Array.from({length: 54}, (_, i) => 
+        <input type="text" class="room-name" value="${mapping.name}" data-room-id="${mapping.roomId}" placeholder="Nazwa pokoju">
+        <select class="room-pin" data-room-id="${mapping.roomId}">
+          ${Array.from({length: 54}, (_, i) =>
             `<option value="${i}" ${mapping.pin === i ? 'selected' : ''}>Pin ${i}</option>`
           ).join('')}
         </select>
@@ -501,13 +597,32 @@ document.addEventListener("DOMContentLoaded", function () {
   connectWebSocket();
   console.log("DOM fully loaded and parsed");
 
-  const configButton = document.querySelector(".noselect");
+  const configButton = document.querySelector(".configButton");
   const wifiConfigButton = document.querySelector("#wifiConfig");
   const modal = document.getElementById("configModal");
   const span = document.getElementsByClassName("close")[0];
   const saveButton = document.getElementById("saveConfig");
   const roomList = document.getElementById("roomList");
   const useGazButton = document.getElementById("useGazButton");
+  const tabButtons = document.querySelectorAll(".tab-button");
+  const tabContents = document.querySelectorAll(".tab-content");
+
+  // Obsługa zakładek
+  tabButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      // Usuń klasę active ze wszystkich przycisków
+      tabButtons.forEach(btn => btn.classList.remove("active"));
+      // Dodaj klasę active do klikniętego przycisku
+      button.classList.add("active");
+
+      // Ukryj wszystkie zakładki
+      tabContents.forEach(content => content.style.display = "none");
+
+      // Pokaż odpowiednią zakładkę
+      const tabId = button.getAttribute("data-tab");
+      document.getElementById(`${tabId}-tab`).style.display = "block";
+    });
+  });
 
   wsSendCommand = (command, value) => {
     ws.send(JSON.stringify({ command: command, value: value }));
@@ -554,65 +669,43 @@ document.addEventListener("DOMContentLoaded", function () {
 
   saveButton.onclick = function () {
     const roomConfigs = [];
-    const selects = roomList.querySelectorAll("select");
-    selects.forEach((select) => {
+    const roomItems = roomList.querySelectorAll(".room-item");
+
+    roomItems.forEach((item) => {
+      const nameInput = item.querySelector(".room-name");
+      const pinSelect = item.querySelector(".room-pin");
+
       roomConfigs.push({
-        id: select.getAttribute("data-room-id"),
-        pinNumber: select.value,
+        id: nameInput.getAttribute("data-room-id"),
+        name: nameInput.value,
+        pinNumber: pinSelect.value,
       });
     });
-    ws.send(JSON.stringify({ command: "updatePins", rooms: roomConfigs }));
-    
-    // modal.innerHTML = "Pins zapisane";
 
-    setTimeout(() => {  
+    ws.send(JSON.stringify({
+      command: "updateRooms",
+      rooms: roomConfigs
+    }));
+
+    // Pokaż komunikat o zapisaniu
+    const saveMessage = document.createElement("div");
+    saveMessage.className = "save-message";
+    saveMessage.textContent = "Konfiguracja zapisana";
+    saveMessage.style.position = "absolute";
+    saveMessage.style.top = "50%";
+    saveMessage.style.left = "50%";
+    saveMessage.style.transform = "translate(-50%, -50%)";
+    saveMessage.style.backgroundColor = "#4CAF50";
+    saveMessage.style.color = "white";
+    saveMessage.style.padding = "15px";
+    saveMessage.style.borderRadius = "5px";
+    saveMessage.style.zIndex = "1000";
+
+    modal.appendChild(saveMessage);
+
+    setTimeout(() => {
+      saveMessage.remove();
       modal.style.display = "none";
-    }, 1000);
-    
+    }, 1500);
   };
 });
-
-// Dodaj obsługę przycisku konfiguracji
-const configButton = document.getElementById('configButton');
-const configModal = document.getElementById('configModal');
-const closeModal = document.getElementsByClassName('close')[0];
-const saveConfigBtn = document.getElementById('saveConfig');
-
-configButton.onclick = function() {
-    configModal.style.display = "block";
-    // Pobierz aktualne mapowanie pinów
-    if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ command: "getPinMappings" }));
-    }
-};
-
-closeModal.onclick = function() {
-    configModal.style.display = "none";
-};
-
-window.onclick = function(event) {
-    if (event.target == configModal) {
-        configModal.style.display = "none";
-    }
-};
-
-saveConfigBtn.onclick = function() {
-    // Pobierz wszystkie selecty z pinami
-    const pinSelects = document.querySelectorAll('#roomList select');
-    pinSelects.forEach(select => {
-        const roomId = parseInt(select.dataset.roomId);
-        const newPin = parseInt(select.value);
-        
-        // Wyślij aktualizację dla każdego pokoju
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                command: "updatePin",
-                roomId: roomId,
-                pin: newPin
-            }));
-        }
-    });
-    
-    // Zamknij modal po zapisaniu
-    configModal.style.display = "none";
-};

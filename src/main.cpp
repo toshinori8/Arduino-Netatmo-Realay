@@ -210,20 +210,14 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       int id = docInput["id"];
       float targetTemperature = docInput["targetTemperature"];
       bool forced = docInput["forced"];
-
-      // manager.updateOrAddRoom(RoomData(nullptr, id, nullptr, targetTemperature, nullptr, nullptr));
-
-      // RoomData() : name(""), ID(-1), pinNumber(0), targetTemperature(0.0), currentTemperature(0.0), forced(false), battery_state(""), battery_level(0), rf_strength(0), reachable(false), anticipating("") {}
-      //
-
-      manager.updateOrAddRoom(RoomData("", id, 0, targetTemperature, 0.0, false, "", 0, 0, false, ""));
+      manager.setTemperature(id, targetTemperature);
+     
 
       if (docInput["usegaz"] == "false")
       {
         manager.setTemperature(id, targetTemperature);
       }
     }
-    // {"rooms":[],"meta":{"pin_0":{"state":"OFF","forced":"false"},"pin_1":{"state":"OFF","forced":"false"},"pin_2":{"state":"OFF","forced":"false"},"pin_3":{"state":"OFF","forced":"false"},"WoodStove":"off","manifoldTemp":0,"netatmoData":""}}
 
 
 
@@ -251,7 +245,14 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       // room.forced =forced;
 
       Serial.println(forced);
-      manager.updateOrAddRoom(RoomData("", id, 0, targetTemperature, 0.0, forced, "", 0, 0, false, ""));
+      // Pobierz aktualne dane pokoju, aby nie stracić innych wartości
+      RoomData updatedRoom = manager.getRoomByID(id);
+      // Aktualizuj tylko forced i targetTemperature
+      updatedRoom.forced = forced;
+      if (targetTemperature > 0) {
+        updatedRoom.targetTemperature = targetTemperature;
+      }
+      manager.updateOrAddRoom(updatedRoom);
 
 
     if (forced)
@@ -265,28 +266,10 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       docPins["pins"][pin]["forced"] = "false";
     } 
 
-
-
-
-
     }
  
 
-    // extract the pin number and state from the JSON message
-   /*  pin = String(docInput["pin"]);
-    forced = String(docInput["forced"]);
-    state = String(docInput["state"]);
-
-    if (forced == "true")
-    {
-      docPins["pins"][pin]["state"] = "ON";
-      docPins["pins"][pin]["forced"] = "true";
-    }
-    else
-    {
-      docPins["pins"][pin]["state"] = "OFF";
-      docPins["pins"][pin]["forced"] = "false";
-    } */
+    
 
     // Dodaj obsługę nowych komend
     if (docInput["command"] == "getPinMappings") {
@@ -326,8 +309,6 @@ void setup()
 {
 
   Serial.begin(115200);
-
-  Serial.println();
   Serial.println("Starting up...");
 
   // -- Initializing the configuration.
@@ -380,11 +361,10 @@ void setup()
     Serial.println("error");
   }
 
-  // blinkOutput(20);
 
   otaStart();
   initInputExpander();
-
+  blinkOutput(20);
   // Inicjalizacja ESP-NOW
   if (esp_now_init() != ERR_OK)
   {
@@ -398,81 +378,169 @@ void setup()
   timers.attach(1, 12000, broadcastWebsocket);
 }
 
-void manifoldLogic()
+// void manifoldLogic()
+// {
+
+//   bool anyForcedON = 0;
+//   bool anyInputON = 0;
+//   docPins["manifoldTemp"] = manifoldTemp;
+//   unsigned long currentMillis = millis(); // Get the current time
+
+//   delay(400);
+
+//   // Update JSON doc from six states on first expander
+
+//   for (int i = 0; i < 6; i++)
+//   {
+//     String curr_pin = String(ExpInput.digitalRead(i));
+
+//     if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
+//     {
+//       anyForcedON = 1;
+//     }
+//   }
+
+//   // check woodStove init input
+
+//   // Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
+//   // if (String(ExpInput.digitalRead(P6)) == "true")
+//   // {
+
+//   //   // Serial.println("WoodStove operating ");
+//   //   docPins["WoodStove"] = "on";
+//   // }
+//   // if (String(ExpInput.digitalRead(P6)) == "false")
+//   // {
+
+//   //   // Serial.println("WoodStove off ");
+//   //   docPins["WoodStove"] = "off";
+//   // }
+
+//   if (anyForcedON == 1)
+//   {
+//     for (int i = 0; i < 6; i++)
+//     {
+
+//       if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
+//       {
+//         ExpOutput.digitalWrite(i, HIGH);
+//       }
+//       else
+//       {
+//         ExpOutput.digitalWrite(i, LOW);
+//       }
+//     }
+//   }
+
+//   // if (anyForcedON && useGaz_)
+//   // {
+//   //   // useGaz();
+//   // }
+
+//   if (anyForcedON == 0)
+//   {
+//     // Serial.println("Pump OFF");
+//     //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
+//     ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+//     //   doc["piec_pompa"] = "OFF";
+//     //   doc["led"] = "OFF";
+
+//     // Serial.println("All valves OFF");
+//     for (int i = 0; i < 6; i++)
+//     {
+
+//       ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
+//     }
+//   }
+// }
+
+
+void manifoldLogicNew()
 {
+    delay(400);
 
-  bool anyForcedON = 0;
-  bool anyInputON = 0;
-  docPins["manifoldTemp"] = manifoldTemp;
-  unsigned long currentMillis = millis(); // Get the current time
+    // Pobierz wszystkie pokoje z RoomManager
+    const std::vector<RoomData>& rooms = manager.getAllRooms();
 
-  delay(400);
+    // Flagi do śledzenia stanu
+    bool anyRoomNeedsHeating = false;
+    bool anyRoomForced = false;
 
-  // Update JSON doc from six states on first expander
+    // Zmienne do śledzenia pokoju z najniższą temperaturą wśród wymuszonych
+    int lowestTempForcedRoomId = -1;
+    float lowestTemp = 100.0; // Inicjalizacja wysoką wartością
 
-  for (int i = 0; i < 6; i++)
-  {
-    String curr_pin = String(ExpInput.digitalRead(i));
+    // Zmienne do śledzenia pokoju z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
+    float maxPriority = -999.0;
+    int maxPriorityRoomId = -1;
 
-    if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
-    {
-      anyForcedON = 1;
+    // Przejdź przez wszystkie pokoje
+    for (const auto& room : rooms) {
+        // Oblicz priorytet (różnica między temperaturą docelową a aktualną)
+        float priority = room.targetTemperature - room.currentTemperature;
+
+        // Sprawdź, czy pokój wymaga ogrzewania (temperatura docelowa > aktualna)
+        if (priority > 0) {
+            anyRoomNeedsHeating = true;
+        }
+
+        // Sprawdź, czy pokój jest w trybie wymuszonym
+        if (room.forced) {
+            anyRoomForced = true;
+
+            // Sprawdź, czy ten pokój ma najniższą temperaturę wśród wymuszonych
+            if (room.currentTemperature < lowestTemp) {
+                lowestTemp = room.currentTemperature;
+                lowestTempForcedRoomId = room.ID;
+            }
+        }
+
+        // Aktualizuj pokój z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
+        if (priority > maxPriority) {
+            maxPriority = priority;
+            maxPriorityRoomId = room.ID;
+        }
     }
-  }
 
-  // check woodStove init input
+    // Najpierw sprawdź, czy są pokoje w trybie wymuszonym
+    if (anyRoomForced && lowestTempForcedRoomId != -1) {
+        Serial.println("Tryb wymuszony aktywny - wybieranie pokoju z najniższą temperaturą");
 
-  // Serial.println(String(ExpInput.digitalRead(P6)) + " ExpInput.digital P6");
-  // if (String(ExpInput.digitalRead(P6)) == "true")
-  // {
+        // Przejdź przez wszystkie pokoje
+        for (const auto& room : rooms) {
+            if (room.ID == lowestTempForcedRoomId) {
+                // Włącz odpowiedni pin dla pokoju z najniższą temperaturą wśród wymuszonych
+                if (room.pinNumber >= 0 && room.pinNumber < 6) {
+                    // informacje w serial o ogrzewaniu
+                    Serial.print("Ogrzewanie w pokoju wymuszonym: ");
+                    Serial.println(room.name.c_str());
+                    Serial.print("Stan pinu: ");
+                    Serial.println(room.pinNumber);
+                    Serial.print("Temperatura: ");
+                    Serial.println(room.currentTemperature);
 
-  //   // Serial.println("WoodStove operating ");
-  //   docPins["WoodStove"] = "on";
-  // }
-  // if (String(ExpInput.digitalRead(P6)) == "false")
-  // {
-
-  //   // Serial.println("WoodStove off ");
-  //   docPins["WoodStove"] = "off";
-  // }
-
-  if (anyForcedON == 1)
-  {
-    for (int i = 0; i < 6; i++)
-    {
-
-      if (docPins["pins"]["pin_" + String(i)]["forced"] == "true")
-      {
-        ExpOutput.digitalWrite(i, HIGH);
-      }
-      else
-      {
-        ExpOutput.digitalWrite(i, LOW);
-      }
+                    ExpOutput.digitalWrite(room.pinNumber, LOW); // LOW = ON
+                    docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
+                    docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = "true";
+                }
+            } else {
+                // Wyłącz piny dla pozostałych pokoi
+                if (room.pinNumber >= 0 && room.pinNumber < 6) {
+                    ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = OFF
+                    docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "OFF";
+                    docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = room.forced ? "true" : "false";
+                }
+            }
+        }
     }
-  }
+   
+    // Jeśli żaden pokój nie potrzebuje ogrzewania i żaden nie jest wymuszony */
+   
 
-  // if (anyForcedON && useGaz_)
-  // {
-  //   // useGaz();
-  // }
-
-  if (anyForcedON == 0)
-  {
-    // Serial.println("Pump OFF");
-    //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
-    ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
-    //   doc["piec_pompa"] = "OFF";
-    //   doc["led"] = "OFF";
-
-    // Serial.println("All valves OFF");
-    for (int i = 0; i < 6; i++)
-    {
-
-      ExpOutput.digitalWrite(i, HIGH); // Pinoutput OFF
-    }
-  }
+    // Aktualizuj docPins z informacjami o pokojach
+    docPins["roomsInfo"] = manager.getRoomsAsJson();
 }
+
 
 void loop()
 {
@@ -491,7 +559,8 @@ void loop()
     webSocket.loop();
     ArduinoOTA.handle();
 
-    manifoldLogic();
+    // manifoldLogic();
+    manifoldLogicNew();
 
     timers.process();
   }

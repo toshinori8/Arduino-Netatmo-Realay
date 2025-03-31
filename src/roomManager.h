@@ -11,34 +11,8 @@
 // API endpoints
 const char *api_url = "http://netatmo.adamkarski.art/getdata";
 
-// Mapowanie ID na piny
-std::map<int, int> idToPinMap = {
-    {1812451076, 1},
-    {206653929, 2},
-    {1868270675, 3},
-    {38038562, 4}
-};
-
 struct RoomData
 {
-   
-  /*  {
-      id: '38038562',
-      reachable: true,
-      anticipating: null,
-
-      therm_measured_temperature: 10.8,
-      therm_setpoint_temperature: 28,
-      therm_setpoint_mode: 'manual',
-      name: 'Waleria',
-      type: 'custom',
-      battery_state: 'high',
-      battery_level: 3782,
-      rf_strength: 40
-    }
-   
- */
-
     std::string name;         // Nazwa pokoju
     int ID;                   // ID pokoju
     int pinNumber;            // Numer przyporzadkowanego pinu
@@ -51,19 +25,26 @@ struct RoomData
     String type;              // Typ pokoju
     bool reachable;           // Czy pokój jest osiągalny
     String anticipating;      // Czy pokój jest w trybie oczekiwania
+    float priority;           // Priorytet pokoju
+    bool valve;               // Czy zawór jest otwarty (dla pokoju z najwyższym priorytetem)
 
 
+    RoomData() : name(""), ID(-1), pinNumber(0), targetTemperature(0.0), currentTemperature(0.0), forced(false), battery_state(""), battery_level(0), rf_strength(0), reachable(false), anticipating(""), priority(0), valve(false) {}
 
-    RoomData() : name(""), ID(-1), pinNumber(0), targetTemperature(0.0), currentTemperature(0.0), forced(false), battery_state(""), battery_level(0), rf_strength(0), reachable(false), anticipating("") {}
-
-    RoomData(const std::string& name, int ID, int pinNumber, float targetTemperature, float currentTemperature, bool forced, const String& battery_state, int battery_level, int rf_strength, bool reachable, const String& anticipating)
-        : name(name), ID(ID), pinNumber(pinNumber), targetTemperature(targetTemperature), currentTemperature(currentTemperature), forced(forced), battery_state(battery_state), battery_level(battery_level), rf_strength(rf_strength), reachable(reachable), anticipating(anticipating) {}
+    RoomData(const std::string& name, int ID, int pinNumber, float targetTemperature, float currentTemperature, bool forced, const String& battery_state, int battery_level, int rf_strength, bool reachable, const String& anticipating, float priority = 0.0, bool valve = false)
+        : name(name), ID(ID), pinNumber(pinNumber), targetTemperature(targetTemperature), currentTemperature(currentTemperature), forced(forced), battery_state(battery_state), battery_level(battery_level), rf_strength(rf_strength), reachable(reachable), anticipating(anticipating), priority(priority), valve(valve) {}
 };
 
 class RoomManager
 {
 public:
-    RoomManager() : requestInProgress(false) {}
+    RoomManager() : requestInProgress(false) {
+        // Inicjalizacja domyślnego mapowania ID na piny
+        idToPinMap[1812451076] = 1;
+        idToPinMap[206653929] = 2;
+        idToPinMap[1868270675] = 3;
+        idToPinMap[38038562] = 4;
+    }
 
     void addRoom(const RoomData &room)
     {
@@ -94,16 +75,15 @@ public:
 
     void updateRoomParams(RoomData &existingRoom, const RoomData &newRoom)
     {
-
-
-
+        if (newRoom.targetTemperature != 0.0)
+            existingRoom.targetTemperature = newRoom.targetTemperature;
         if(docPins["usegaz"] == "true")
         {
             if (newRoom.targetTemperature != 0.0)
             existingRoom.targetTemperature = newRoom.targetTemperature;
         }
 
-
+        // Aktualizacja nazwy pokoju
         if (!newRoom.name.empty())
             existingRoom.name = newRoom.name;
         if (newRoom.ID != -1)
@@ -124,6 +104,10 @@ public:
         if(newRoom.anticipating != "")
             existingRoom.anticipating = newRoom.anticipating;
         existingRoom.forced = newRoom.forced;
+
+        // Obliczanie priorytetu
+        existingRoom.priority = existingRoom.targetTemperature - existingRoom.currentTemperature;
+
     }
 
     RoomData getRoom(size_t index)
@@ -180,8 +164,50 @@ public:
         DynamicJsonDocument docx(2024);
         JsonArray roomsArray = docx.createNestedArray("rooms");
 
+        // Zmienne do śledzenia pokoju z najniższą temperaturą wśród wymuszonych
+        int lowestTempForcedRoomId = -1;
+        float lowestTemp = 100.0; // Inicjalizacja wysoką wartością
+
+        // Zmienne do śledzenia pokoju z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
+        float maxPriority = -999.0;
+        int maxPriorityRoomId = -1;
+
+        // Flaga do śledzenia, czy jakikolwiek pokój jest w trybie wymuszonym
+        bool anyRoomForced = false;
+
+        // Najpierw sprawdź, czy są pokoje w trybie wymuszonym i znajdź ten z najniższą temperaturą
         for (const auto &room : rooms)
         {
+            // Sprawdź, czy pokój jest w trybie wymuszonym
+            if (room.forced) {
+                anyRoomForced = true;
+
+                // Sprawdź, czy ten pokój ma najniższą temperaturę wśród wymuszonych
+                if (room.currentTemperature < lowestTemp) {
+                    lowestTemp = room.currentTemperature;
+                    lowestTempForcedRoomId = room.ID;
+                }
+            }
+
+            // Oblicz priorytet dla przypadku, gdy nie ma pokoi wymuszonych
+            float roomPriority = room.targetTemperature - room.currentTemperature;
+            if (roomPriority > maxPriority)
+            {
+                maxPriority = roomPriority;
+                maxPriorityRoomId = room.ID;
+            }
+        }
+
+        for (auto &room : rooms)
+        {
+            // Ustaw valve na true dla pokoju z najniższą temperaturą wśród wymuszonych
+            // lub dla pokoju z najwyższym priorytetem, jeśli nie ma pokoi wymuszonych
+            if (anyRoomForced) {
+                room.valve = (room.ID == lowestTempForcedRoomId);
+            } else {
+                room.valve = (room.ID == maxPriorityRoomId);
+            }
+
             JsonObject roomObject = roomsArray.createNestedObject();
             roomObject["name"] = room.name;
             roomObject["id"] = room.ID;
@@ -194,7 +220,8 @@ public:
             roomObject["rf_strength"] = room.rf_strength;
             roomObject["reachable"] = room.reachable;
             roomObject["anticipating"] = room.anticipating;
-            
+            roomObject["priority"] = room.targetTemperature - room.currentTemperature;
+            roomObject["valve"] = room.valve;
         }
          
          // Kopiowanie docPins do meta w docx
@@ -205,16 +232,16 @@ public:
         String jsonString;
         
         serializeJson(docx, jsonString);
-        Serial.println(jsonString);
+        //Serial.println(jsonString);
         return jsonString;
     }
 
-    void setTemperature(int roomID, float setTemperature)
+    void setTemperature(int roomID, float temp)
     {
    
        
 
-        Serial.printf("Setting temperature on \n", roomID, setTemperature);
+        Serial.printf("Setting temperature on \n", roomID, temp);
    
             if (WiFi.status() == WL_CONNECTED)
         {
@@ -222,16 +249,24 @@ public:
 
             HTTPClient http;
    
-            String url = "http://netatmo.adamkarski.art/setRoomTemperature?mode=manual&temperature=" + String(setTemperature) + "&room_id=" + String(roomID);
+            String url = "http://netatmo.adamkarski.art/setRoomTemperature?mode=manual&temperature="+String(temp)+"&room_id=" + String(roomID);
             http.begin(client, url);   
             int httpCode = http.GET();
+       
 
             Serial.printf("HTTP GET request code: %d\n", httpCode);
             Serial.printf("%s", url.c_str());
 
+   
+            Serial.println(http.getString());
 
+            http.end(); // Dodano http.end()
 
-
+            // Pobierz aktualne dane po zmianie temperatury
+            fetchJsonData(api_url); // Dodano wywołanie fetchJsonData
+            
+            // Wyslij dane przez websocket
+           
         }
         else
         {
@@ -243,6 +278,8 @@ public:
 
     void fetchJsonData(const char *url)
     {
+        
+
         if (isRequestInProgress())
         {
             Serial.println("Request already in progress");
@@ -265,7 +302,9 @@ public:
             if (httpCode > 0)
             {
                 String payload = http.getString();
-                Serial.println("Received payload:");
+                //Serial.println("Received payload:_______________________");
+                //Serial.println(payload);
+                
 
                 if (payload.length() > 0)
                 {
@@ -292,7 +331,15 @@ public:
                         int id = room["id"].as<int>();
                         float currentTemperature = room["therm_measured_temperature"].as<float>();
                         float targetTemperature = room["therm_setpoint_temperature"].as<float>();
-                        bool forced = strcmp(room["therm_setpoint_mode"], "away") == 0;
+                        // Zachowaj wartość forced z istniejącego pokoju, jeśli istnieje
+                        bool forced = false;
+                        // Sprawdź, czy pokój już istnieje w naszej kolekcji
+                        for (const auto &existingRoom : this->rooms) {
+                            if (existingRoom.ID == id) {
+                                forced = existingRoom.forced;
+                                break;
+                            }
+                        }
 
                         String battery_state = room["battery_state"].as<const char *>();
                         int battery_level = room["battery_level"].as<int>();
@@ -300,13 +347,18 @@ public:
                         String type = room["type"].as<const char *>();
                         bool reachable = room["reachable"].as<bool>();
                         String anticipating = room["anticipating"].as<const char *>();
-
+                        float priority = currentTemperature - targetTemperature;
+                        
 
 
                         // Sprawdź przypisany pin na podstawie ID
-                        int pinNumber = idToPinMap[id];
+                        int pinNumber = this->idToPinMap[id];
+                        Serial.print("ID: ");
+                        Serial.print(id);
+                        Serial.print(", Pin: ");
+                        Serial.println(pinNumber);
 
-                        updateOrAddRoom(RoomData(name, id, pinNumber, targetTemperature, currentTemperature, forced, battery_state, battery_level, rf_strength, reachable, anticipating));
+                        updateOrAddRoom(RoomData(name, id, pinNumber, targetTemperature, currentTemperature, forced, battery_state, battery_level, rf_strength, reachable, anticipating, priority));
                     }
                 }
                 else
@@ -345,17 +397,27 @@ public:
     String getPinMappingAsJson() {
         DynamicJsonDocument doc(1024);
         JsonArray mappings = doc.createNestedArray("pinMappings");
-        
+
         for (const auto &room : rooms) {
             JsonObject mapping = mappings.createNestedObject();
             mapping["roomId"] = room.ID;
             mapping["name"] = room.name;
             mapping["pin"] = room.pinNumber;
         }
-        
+
         String jsonString;
         serializeJson(doc, jsonString);
         return jsonString;
+    }
+
+    // Metoda zwracająca referencję do wektora pokoi
+    const std::vector<RoomData>& getAllRooms() const {
+        return rooms;
+    }
+
+    // Metoda zwracająca liczbę pokoi
+    size_t getRoomCount() const {
+        return rooms.size();
     }
 
 private:

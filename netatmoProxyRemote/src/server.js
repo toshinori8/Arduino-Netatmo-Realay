@@ -116,7 +116,7 @@ app.listen(PORT, () => {
 // set function  set temperature and mode
 app.get("/setRoomTemperature", async (req, res) => {
 
-
+  console.log(req.query);
   try {
     const tokens = await loadTokens();
     let { access_token, refresh_token } = tokens;
