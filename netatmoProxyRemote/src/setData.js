@@ -66,9 +66,6 @@ async function setRoomTemperature(access_token, refresh_token, roomId, temperatu
     temp: temperature
   };
 
-  console.log(url);
-  console.log(data);
-
   let response = await makePostRequest(url, access_token, data);
   console.log('Response from setRoomTemperature:', response);
   if (response.error && (response.error.code === 3 || response.error.code === 2)) {
@@ -76,6 +73,7 @@ async function setRoomTemperature(access_token, refresh_token, roomId, temperatu
     saveTokens(access_token, refresh_token);
     response = await makePostRequest(url, access_token, data);
   }
+
   return response;
 }
 

@@ -200,12 +200,12 @@ public:
 
         for (auto &room : rooms)
         {
-            // Ustaw valve na true dla pokoju z najniższą temperaturą wśród wymuszonych
-            // lub dla pokoju z najwyższym priorytetem, jeśli nie ma pokoi wymuszonych
+            // Ustaw valve na true tylko dla pokoju z najniższą temperaturą wśród wymuszonych
+            // Jeśli nie ma pokoi wymuszonych, żaden pokój nie powinien mieć valve=true
             if (anyRoomForced) {
                 room.valve = (room.ID == lowestTempForcedRoomId);
             } else {
-                room.valve = (room.ID == maxPriorityRoomId);
+                room.valve = false; // Jeśli nie ma pokoi wymuszonych, żaden nie ma valve=true
             }
 
             JsonObject roomObject = roomsArray.createNestedObject();

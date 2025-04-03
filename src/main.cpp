@@ -305,6 +305,148 @@ void broadcastWebsocket()
   webSocket.broadcastTXT(data);
 }
 
+
+void manifoldLogicNew()
+{
+    delay(400);
+
+    // Pobierz wszystkie pokoje z RoomManager
+    const std::vector<RoomData>& rooms = manager.getAllRooms();
+
+    // Flagi do śledzenia stanu
+    bool anyRoomNeedsHeating = false;
+    bool anyRoomForced = false;
+
+    // Zmienne do śledzenia pokoju z najniższą temperaturą wśród wymuszonych
+    int lowestTempForcedRoomId = -1;
+    float lowestTemp = 100.0; // Inicjalizacja wysoką wartością
+
+    // Zmienne do śledzenia pokoju z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
+    float maxPriority = -999.0;
+    int maxPriorityRoomId = -1;
+
+    // Przejdź przez wszystkie pokoje
+    for (const auto& room : rooms) {
+        // Oblicz priorytet (różnica między temperaturą docelową a aktualną)
+        float priority = room.targetTemperature - room.currentTemperature;
+
+        // Sprawdź, czy pokój wymaga ogrzewania (temperatura docelowa > aktualna)
+        if (priority > 0) {
+            anyRoomNeedsHeating = true;
+        }
+
+        // Sprawdź, czy pokój jest w trybie wymuszonym
+        if (room.forced) {
+            anyRoomForced = true;
+
+            // Sprawdź, czy ten pokój ma najniższą temperaturę wśród wymuszonych
+            if (room.currentTemperature < lowestTemp) {
+                lowestTemp = room.currentTemperature;
+                lowestTempForcedRoomId = room.ID;
+            }
+        }
+
+        // Aktualizuj pokój z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
+        if (priority > maxPriority) {
+            maxPriority = priority;
+            maxPriorityRoomId = room.ID;
+        }
+    }
+
+    // Najpierw ustaw wszystkie piny na LOW (wyłączone)
+   if(anyRoomForced){
+    for (int i = 0; i < 6; i++) {
+        ExpOutput.digitalWrite(i, LOW); // LOW = OFF (odwrócona logika)
+        docPins["pins"]["pin_" + String(i)]["state"] = "OFF";
+    }
+}
+    // Sprawdź, czy są pokoje w trybie wymuszonym
+    if (anyRoomForced && lowestTempForcedRoomId != -1) {
+        Serial.println("Tryb wymuszony aktywny - wybieranie pokoju z najniższą temperaturą");
+
+        // Znajdź pokój z najniższą temperaturą wśród wymuszonych
+        for (const auto& room : rooms) {
+            if (room.ID == lowestTempForcedRoomId) {
+                // Sprawdź, czy pokój potrzebuje ogrzewania (temperatura docelowa > aktualna)
+                float priority = room.targetTemperature - room.currentTemperature;
+
+                if (priority > 0) {  // Tylko jeśli pokój potrzebuje ogrzewania
+                    // Włącz odpowiedni pin dla pokoju z najniższą temperaturą wśród wymuszonych
+                    if (room.pinNumber >= 0 && room.pinNumber < 6) {
+                        // informacje w serial o ogrzewaniu
+                        Serial.print("Ogrzewanie w pokoju wymuszonym: ");
+                        Serial.println(room.name.c_str());
+                        Serial.print("Stan pinu: ");
+                        Serial.println(room.pinNumber);
+                        Serial.print("Temperatura aktualna: ");
+                        Serial.println(room.currentTemperature);
+                        Serial.print("Temperatura docelowa: ");
+                        Serial.println(room.targetTemperature);
+                        Serial.print("Priorytet (różnica): ");
+                        Serial.println(priority);
+
+                        ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON (odwrócona logika)
+                        docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
+                    }
+                } else {
+                    Serial.print("Pokój wymuszony nie potrzebuje ogrzewania: ");
+                    Serial.println(room.name.c_str());
+                    Serial.print("Temperatura aktualna: ");
+                    Serial.println(room.currentTemperature);
+                    Serial.print("Temperatura docelowa: ");
+                    Serial.println(room.targetTemperature);
+                }
+
+                // Zawsze ustawiamy forced na true, niezależnie od tego czy grzejemy
+                if (room.pinNumber >= 0 && room.pinNumber < 6) {
+                    docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = "true";
+                }
+
+                break; // Znaleźliśmy pokój, więc możemy przerwać pętlę
+            }
+        }
+    
+        // Jeśli nie ma pokoi wymuszonych, ale są pokoje potrzebujące ogrzewania,
+        // wybierz pokój z najwyższym priorytetem
+        Serial.println("Brak pokoi wymuszonych - wybieranie pokoju z najwyższym priorytetem");
+
+        for (const auto& room : rooms) {
+            if (room.ID == maxPriorityRoomId) {
+                if (room.pinNumber >= 0 && room.pinNumber < 6) {
+                    Serial.print("Ogrzewanie w pokoju z najwyższym priorytetem: ");
+                    Serial.println(room.name.c_str());
+                    Serial.print("Stan pinu: ");
+                    Serial.println(room.pinNumber);
+                    Serial.print("Temperatura aktualna: ");
+                    Serial.println(room.currentTemperature);
+                    Serial.print("Temperatura docelowa: ");
+                    Serial.println(room.targetTemperature);
+                    Serial.print("Priorytet (różnica): ");
+                    Serial.println(room.targetTemperature - room.currentTemperature);
+
+                    ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON (odwrócona logika)
+                    docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
+                }
+                break;
+            }
+        }
+    } else {
+        Serial.println("Brak pokoi wymagających ogrzewania lub brak pokoi wymuszonych z potrzebą ogrzewania");
+    }
+
+    // Aktualizuj stan forced dla wszystkich pokoi w docPins
+    for (const auto& room : rooms) {
+        if (room.pinNumber >= 0 && room.pinNumber < 6) {
+            docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = room.forced ? "true" : "false";
+        }
+    }
+
+    // Aktualizuj docPins z informacjami o pokojach
+    docPins["roomsInfo"] = manager.getRoomsAsJson();
+}
+
+
+
 void setup()
 {
 
@@ -376,6 +518,8 @@ void setup()
   // Inicjalizacja timera
   timers.attach(0, 35000, fetchNetatmo);
   timers.attach(1, 12000, broadcastWebsocket);
+  timers.attach(2, 20000, manifoldLogicNew);
+  
 }
 
 // void manifoldLogic()
@@ -455,91 +599,6 @@ void setup()
 // }
 
 
-void manifoldLogicNew()
-{
-    delay(400);
-
-    // Pobierz wszystkie pokoje z RoomManager
-    const std::vector<RoomData>& rooms = manager.getAllRooms();
-
-    // Flagi do śledzenia stanu
-    bool anyRoomNeedsHeating = false;
-    bool anyRoomForced = false;
-
-    // Zmienne do śledzenia pokoju z najniższą temperaturą wśród wymuszonych
-    int lowestTempForcedRoomId = -1;
-    float lowestTemp = 100.0; // Inicjalizacja wysoką wartością
-
-    // Zmienne do śledzenia pokoju z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
-    float maxPriority = -999.0;
-    int maxPriorityRoomId = -1;
-
-    // Przejdź przez wszystkie pokoje
-    for (const auto& room : rooms) {
-        // Oblicz priorytet (różnica między temperaturą docelową a aktualną)
-        float priority = room.targetTemperature - room.currentTemperature;
-
-        // Sprawdź, czy pokój wymaga ogrzewania (temperatura docelowa > aktualna)
-        if (priority > 0) {
-            anyRoomNeedsHeating = true;
-        }
-
-        // Sprawdź, czy pokój jest w trybie wymuszonym
-        if (room.forced) {
-            anyRoomForced = true;
-
-            // Sprawdź, czy ten pokój ma najniższą temperaturę wśród wymuszonych
-            if (room.currentTemperature < lowestTemp) {
-                lowestTemp = room.currentTemperature;
-                lowestTempForcedRoomId = room.ID;
-            }
-        }
-
-        // Aktualizuj pokój z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
-        if (priority > maxPriority) {
-            maxPriority = priority;
-            maxPriorityRoomId = room.ID;
-        }
-    }
-
-    // Najpierw sprawdź, czy są pokoje w trybie wymuszonym
-    if (anyRoomForced && lowestTempForcedRoomId != -1) {
-        Serial.println("Tryb wymuszony aktywny - wybieranie pokoju z najniższą temperaturą");
-
-        // Przejdź przez wszystkie pokoje
-        for (const auto& room : rooms) {
-            if (room.ID == lowestTempForcedRoomId) {
-                // Włącz odpowiedni pin dla pokoju z najniższą temperaturą wśród wymuszonych
-                if (room.pinNumber >= 0 && room.pinNumber < 6) {
-                    // informacje w serial o ogrzewaniu
-                    Serial.print("Ogrzewanie w pokoju wymuszonym: ");
-                    Serial.println(room.name.c_str());
-                    Serial.print("Stan pinu: ");
-                    Serial.println(room.pinNumber);
-                    Serial.print("Temperatura: ");
-                    Serial.println(room.currentTemperature);
-
-                    ExpOutput.digitalWrite(room.pinNumber, LOW); // LOW = ON
-                    docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
-                    docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = "true";
-                }
-            } else {
-                // Wyłącz piny dla pozostałych pokoi
-                if (room.pinNumber >= 0 && room.pinNumber < 6) {
-                    ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = OFF
-                    docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "OFF";
-                    docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = room.forced ? "true" : "false";
-                }
-            }
-        }
-    }
-   
-    // Jeśli żaden pokój nie potrzebuje ogrzewania i żaden nie jest wymuszony */
-   
-
-    // Aktualizuj docPins z informacjami o pokojach
-    docPins["roomsInfo"] = manager.getRoomsAsJson();
-}
 
 
 void loop()
@@ -559,8 +618,7 @@ void loop()
     webSocket.loop();
     ArduinoOTA.handle();
 
-    // manifoldLogic();
-    manifoldLogicNew();
+
 
     timers.process();
   }
