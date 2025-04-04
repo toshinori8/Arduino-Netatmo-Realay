@@ -84,7 +84,11 @@ body {
 
 
 
-
+.priority-display{
+    opacity: 0.2;
+    font-size: 10px !important;!i;!;
+    margin-top: -430px !important;
+}
 body.heating::before {
     content: "";
     background: rgba(255, 174, 0, 1.000);
@@ -147,8 +151,8 @@ body::before {
 
 .thermostat-card.expanded {
     /* width: 95vw; */
-    height: 30vh;
- /*    left: -20vh; */
+    height: 449px;
+    /*    left: -20vh; */
 }
 
 /* .thermostat-card.expanded {
@@ -195,7 +199,7 @@ opacity: 1;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     transform-origin: center;
-    height: 210px;
+    height: 210px;!;!i;!;
     z-index: 1;
     overflow: hidden;
     /* animation: shrinkToNormal 0.5s backwards; */

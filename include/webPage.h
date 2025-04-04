@@ -161,8 +161,8 @@ body::before {
 
 .thermostat-card.expanded {
     /* width: 95vw; */
-    height: 30vh;
- /*    left: -20vh; */
+    height: 449px;
+    /*    left: -20vh; */
 }
 
 /* .thermostat-card.expanded {
@@ -209,7 +209,7 @@ opacity: 1;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     transform-origin: center;
-    height: 210px;
+    height: 210px;!;!i;!;
     z-index: 1;
     overflow: hidden;
     /* animation: shrinkToNormal 0.5s backwards; */

@@ -26,7 +26,8 @@ class Room {
     this.id = id;
     this.name = name;
     this.currentTemperature = currentTemperature;
-    this.targetTemperature = targetTemperature;
+    this.targetTemperatureNetatmo = targetTemperature; // Renamed for clarity
+    this.targetTemperatureFireplace = targetTemperature; // Initialize fireplace temp, maybe update later if different
     this.forced = forced;
     this.battery_state = battery_state;
     this.battery_level = battery_level;
@@ -79,16 +80,23 @@ class Room {
     currentTemp.classList.add("temperature");
     currentTemp.innerHTML = `<div class="temperature-value">${this.currentTemperature.toFixed(
       1
-    )}°</div><div class="temperature-label">Current</div>`;
+    )}°</div><div class="temperature-label">Aktualna</div>`; // Polish label
 
-    const targetTemp = document.createElement("div");
-    targetTemp.classList.add("temperature");
-    targetTemp.innerHTML = `<div class="temperature-value">${this.targetTemperature.toFixed(
+    const targetTempNetatmo = document.createElement("div");
+    targetTempNetatmo.classList.add("temperature");
+    targetTempNetatmo.innerHTML = `<div class="temperature-value">${this.targetTemperatureNetatmo.toFixed(
       1
-    )}°</div><div class="temperature-label">Target</div>`;
+    )}°</div><div class="temperature-label">Cel Netatmo</div>`; // Slider 1 Target
+
+    const targetTempFireplace = document.createElement("div");
+    targetTempFireplace.classList.add("temperature");
+    targetTempFireplace.innerHTML = `<div class="temperature-value">${this.targetTemperatureFireplace.toFixed(
+      1 // Initialize with fireplace temp
+    )}°</div><div class="temperature-label">Cel Kominek</div>`; // Slider 2 Target
 
     temperatures.appendChild(currentTemp);
-    temperatures.appendChild(targetTemp);
+    temperatures.appendChild(targetTempNetatmo);
+    temperatures.appendChild(targetTempFireplace); // Add fireplace temp display
 
     const quickActions = document.createElement("div");
     quickActions.classList.add("quick-actions");
@@ -136,26 +144,61 @@ class Room {
     const controls = document.createElement("div");
     controls.classList.add("controls");
 
-    const slider = document.createElement("input");
-    slider.type = "range";
-    slider.classList.add("temperature-slider");
-    slider.min = 2;
-    slider.max = 30;
-    slider.step = 0.2;
-    slider.value = this.targetTemperature;
-    slider.addEventListener("input", (e) => {
-      
-      targetTemp.querySelector(
+    // --- Slider 1: Netatmo Target ---
+    const sliderNetatmoLabel = document.createElement("label");
+    sliderNetatmoLabel.textContent = "Cel Netatmo:";
+    sliderNetatmoLabel.classList.add("slider-label");
+
+    const sliderNetatmo = document.createElement("input");
+    sliderNetatmo.type = "range";
+    sliderNetatmo.classList.add("temperature-slider", "netatmo-slider");
+    sliderNetatmo.min = 5; // Min temp for Netatmo
+    sliderNetatmo.max = 30;
+    sliderNetatmo.step = 0.5; // Step for Netatmo
+    sliderNetatmo.value = this.targetTemperatureNetatmo;
+    sliderNetatmo.addEventListener("input", (e) => {
+      targetTempNetatmo.querySelector(
         ".temperature-value"
       ).textContent = `${parseFloat(e.target.value).toFixed(1)}°`;
-      this.targetTemperature = parseFloat(e.target.value).toFixed(1);
-      this.updateHeatingIndicator();
+      // Update internal value but don't send command yet
+      this.targetTemperatureNetatmo = parseFloat(e.target.value);
+      this.updateHeatingIndicator(); // Update indicator immediately
     });
-    slider.addEventListener("mouseup", () => {
-      this.sendCommand("act_temperature", );
+    sliderNetatmo.addEventListener("mouseup", () => {
+      // Send command only when user releases slider
+      this.sendCommand("act_temperature");
     });
 
-    controls.appendChild(slider);
+    // --- Slider 2: Fireplace Target ---
+    const sliderFireplaceLabel = document.createElement("label");
+    sliderFireplaceLabel.textContent = "Cel Kominek:";
+    sliderFireplaceLabel.classList.add("slider-label");
+
+    const sliderFireplace = document.createElement("input");
+    sliderFireplace.type = "range";
+    sliderFireplace.classList.add("temperature-slider", "fireplace-slider");
+    sliderFireplace.min = 10; // Different range/step for fireplace?
+    sliderFireplace.max = 28;
+    sliderFireplace.step = 0.5;
+    sliderFireplace.value = this.targetTemperatureFireplace;
+    sliderFireplace.addEventListener("input", (e) => {
+      targetTempFireplace.querySelector(
+        ".temperature-value"
+      ).textContent = `${parseFloat(e.target.value).toFixed(1)}°`;
+      // Update internal value
+      this.targetTemperatureFireplace = parseFloat(e.target.value);
+      this.updateHeatingIndicator(); // Update indicator immediately
+    });
+    sliderFireplace.addEventListener("mouseup", () => {
+      // Send specific command for fireplace target
+      this.sendFireplaceCommand();
+    });
+
+    controls.appendChild(sliderNetatmoLabel);
+    controls.appendChild(sliderNetatmo);
+    controls.appendChild(sliderFireplaceLabel);
+    controls.appendChild(sliderFireplace);
+
     const batteryIndicator = this.createBatteryIndicator();
 
     // Create priority display
@@ -369,8 +412,16 @@ class Room {
   }
 
   updateHeatingIndicator() {
-    if (this.targetTemperature > this.currentTemperature) {
-      this.element.dataset.heating = "true";
+    // Use global useGazState (defined later)
+    let effectiveTarget;
+    if (window.useGazState === true) { // Check global state
+        effectiveTarget = Math.max(this.targetTemperatureNetatmo, this.targetTemperatureFireplace);
+    } else {
+        effectiveTarget = this.targetTemperatureFireplace;
+    }
+
+    if (this.currentTemperature < effectiveTarget) {
+      this.element.dataset.heating = "true"; // Used for body class
       if (!this.element.querySelector(".heating-indicator")) {
         const indicator = document.createElement("div");
         indicator.classList.add("heating-indicator");
@@ -407,34 +458,71 @@ class Room {
     document.body.style.overflow = "auto";
   }
 
+  // Command for Slider 1 (Netatmo)
   sendCommand(command) {
     const message = {
       id: this.id,
-      command: command,
-      targetTemperature: parseFloat(this.targetTemperature).toFixed(1),
+      command: command, // e.g., "act_temperature", "forced"
+      targetTemperature: parseFloat(this.targetTemperatureNetatmo).toFixed(1), // Send Netatmo target
       forced: this.forced,
-      priority: this.priority
+      // priority: this.priority // Priority is calculated backend
     };
 
     console.log(message);
+    console.log("Sending command:", message);
     ws.send(JSON.stringify(message));
   }
 
+  // Command for Slider 2 (Fireplace)
+  sendFireplaceCommand() {
+      const message = {
+          id: this.id,
+          command: "set_fireplace_target", // New command
+          targetTemperatureFireplace: parseFloat(this.targetTemperatureFireplace).toFixed(1) // Send fireplace target
+      };
+      console.log("Sending fireplace command:", message);
+      ws.send(JSON.stringify(message));
+  }
+
+
   update(data) {
     this.currentTemperature = data.currentTemperature;
-    this.targetTemperature = data.targetTemperature;
+    // Update both target temperatures from backend data
+    this.targetTemperatureNetatmo = data.targetTemperatureNetatmo;
+    this.targetTemperatureFireplace = data.targetTemperatureFireplace;
     this.forced = data.forced;
     this.battery_state = data.battery_state;
     this.priority = data.priority || this.priority; // Update priority if available
     this.valve = data.valve || false; // Update valve status if available
     this.pinNumber = data.pinNumber || this.pinNumber; // Update pin number if available
 
-    this.element.querySelector(
-      ".temperature:nth-child(1) .temperature-value"
+    // Update UI elements
+    this.element.querySelector( // Current Temp
+      ".temperatures .temperature:nth-child(1) .temperature-value"
     ).textContent = `${this.currentTemperature.toFixed(1)}°`;
-    this.element.querySelector(
-      ".temperature:nth-child(2) .temperature-value"
-    ).textContent = `${this.targetTemperature.toFixed(1)}°`;
+    this.element.querySelector( // Netatmo Target Display
+      ".temperatures .temperature:nth-child(2) .temperature-value"
+    ).textContent = `${this.targetTemperatureNetatmo.toFixed(1)}°`;
+     this.element.querySelector( // Fireplace Target Display
+      ".temperatures .temperature:nth-child(3) .temperature-value"
+    ).textContent = `${this.targetTemperatureFireplace.toFixed(1)}°`;
+
+    // Update slider positions
+    const netatmoSlider = this.element.querySelector(".netatmo-slider");
+    if (netatmoSlider) netatmoSlider.value = this.targetTemperatureNetatmo;
+    const fireplaceSlider = this.element.querySelector(".fireplace-slider");
+    if (fireplaceSlider) fireplaceSlider.value = this.targetTemperatureFireplace;
+
+     // Update forced button state
+    const fireButton = this.element.querySelector(".action-button.a_fire");
+    if (fireButton) {
+        if (this.forced) {
+            fireButton.classList.add("active");
+        } else {
+            fireButton.classList.remove("active");
+        }
+    }
+
 
     // Update priority display
     const priorityDisplay = this.element.querySelector(".priority-display");
@@ -456,14 +544,17 @@ class Room {
 }
 
 let rooms = {};
+window.useGazState = false; // Global state for useGaz
 
 function updateBodyHeatingClass() {
   const thermostatList = document.getElementById("thermostat-list");
+  if (!thermostatList) return; // Guard against null
   const thermostatCards =
     thermostatList.getElementsByClassName("thermostat-card");
   let isHeating = false;
 
   for (let card of thermostatCards) {
+    // Check the data attribute set by updateHeatingIndicator
     if (card.dataset.heating === "true") {
       isHeating = true;
       break;
@@ -479,20 +570,46 @@ function updateBodyHeatingClass() {
 
 function handleWebSocketMessage(data) {
   const parsedData = JSON.parse(data);
+  console.log("Received parsed data:", parsedData); // Log received data
 
   const thermostatList = document.getElementById("thermostat-list");
   const loader = document.getElementById("loader");
+
+  // Check for meta field first to update global state
+   if (parsedData.meta && parsedData.meta.usegaz !== undefined) {
+        window.useGazState = parsedData.meta.usegaz === "true";
+        const useGazButton = document.getElementById("useGazButton");
+        if (useGazButton) {
+             if (window.useGazState) {
+                useGazButton.classList.add("active");
+             } else {
+                 useGazButton.classList.remove("active");
+             }
+        }
+         console.log("Updated useGazState:", window.useGazState);
+    }
+
+
   if (parsedData.rooms) {
     const roomData = parsedData.rooms;
     roomData.forEach((room) => {
+      // Make sure both target temperatures exist in the data
+      const targetNetatmo = room.targetTemperatureNetatmo !== undefined ? room.targetTemperatureNetatmo : 18.0; // Default if missing
+      const targetFireplace = room.targetTemperatureFireplace !== undefined ? room.targetTemperatureFireplace : 18.0; // Default if missing
+
       if (rooms[room.id]) {
-        rooms[room.id].update(room);
+         // Pass both targets to the update method
+         rooms[room.id].update({
+            ...room, // Spread other properties
+            targetTemperatureNetatmo: targetNetatmo,
+            targetTemperatureFireplace: targetFireplace
+         });
       } else {
         const newRoom = new Room(
           room.id,
           room.name,
           room.currentTemperature,
-          room.targetTemperature,
+          targetNetatmo, // Pass Netatmo target to constructor
           room.forced,
           room.battery_level,
           room.battery_state,
@@ -500,6 +617,9 @@ function handleWebSocketMessage(data) {
           room.valve,
           room.pinNumber
         );
+        // Set fireplace temp separately after creation if needed, or modify constructor
+        newRoom.targetTemperatureFireplace = targetFireplace;
+
         rooms[room.id] = newRoom;
         if (thermostatList) {
           thermostatList.appendChild(newRoom.element);
@@ -508,16 +628,15 @@ function handleWebSocketMessage(data) {
         }
       }
     });
-    if (thermostatList.children.length > 0) {
+    if (thermostatList && thermostatList.children.length > 0) {
       loader.style.display = "none";
     }
-    if (parsedData.meta.usegaz === "true") {
-      useGazButton.classList.add("active");
-    } else {
-      useGazButton.classList.remove("active");
-    }
-  } else if (parsedData.command === "getRooms") {
+     // Update indicators for all rooms after processing batch, as useGazState might have changed
+     Object.values(rooms).forEach(room => room.updateHeatingIndicator());
+
+  } else if (parsedData.command === "getRooms") { // Assuming this is for config modal
     const roomList = document.getElementById("roomList");
+    if (!roomList) return;
     roomList.innerHTML = "";
 
     parsedData.rooms.forEach(room => {

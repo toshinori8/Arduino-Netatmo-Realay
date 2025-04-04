@@ -16,7 +16,8 @@ struct RoomData
     std::string name;         // Nazwa pokoju
     int ID;                   // ID pokoju
     int pinNumber;            // Numer przyporzadkowanego pinu
-    float targetTemperature;  // Temperatura zadana
+    float targetTemperatureNetatmo;  // Temperatura zadana Netatmo (Slider 1)
+    float targetTemperatureFireplace; // Temperatura zadana Kominek (Slider 2)
     float currentTemperature; // Temperatura aktualna
     bool forced;              // Czy jest to tryb wymuszony
     String battery_state;     // Stan baterii
@@ -29,10 +30,10 @@ struct RoomData
     bool valve;               // Czy zawór jest otwarty (dla pokoju z najwyższym priorytetem)
 
 
-    RoomData() : name(""), ID(-1), pinNumber(0), targetTemperature(0.0), currentTemperature(0.0), forced(false), battery_state(""), battery_level(0), rf_strength(0), reachable(false), anticipating(""), priority(0), valve(false) {}
+    RoomData() : name(""), ID(-1), pinNumber(0), targetTemperatureNetatmo(0.0), targetTemperatureFireplace(0.0), currentTemperature(0.0), forced(false), battery_state(""), battery_level(0), rf_strength(0), reachable(false), anticipating(""), priority(0), valve(false) {}
 
-    RoomData(const std::string& name, int ID, int pinNumber, float targetTemperature, float currentTemperature, bool forced, const String& battery_state, int battery_level, int rf_strength, bool reachable, const String& anticipating, float priority = 0.0, bool valve = false)
-        : name(name), ID(ID), pinNumber(pinNumber), targetTemperature(targetTemperature), currentTemperature(currentTemperature), forced(forced), battery_state(battery_state), battery_level(battery_level), rf_strength(rf_strength), reachable(reachable), anticipating(anticipating), priority(priority), valve(valve) {}
+    RoomData(const std::string& name, int ID, int pinNumber, float targetTemperatureNetatmo, float targetTemperatureFireplace, float currentTemperature, bool forced, const String& battery_state, int battery_level, int rf_strength, bool reachable, const String& anticipating, float priority = 0.0, bool valve = false)
+        : name(name), ID(ID), pinNumber(pinNumber), targetTemperatureNetatmo(targetTemperatureNetatmo), targetTemperatureFireplace(targetTemperatureFireplace), currentTemperature(currentTemperature), forced(forced), battery_state(battery_state), battery_level(battery_level), rf_strength(rf_strength), reachable(reachable), anticipating(anticipating), priority(priority), valve(valve) {}
 };
 
 class RoomManager
@@ -75,23 +76,24 @@ public:
 
     void updateRoomParams(RoomData &existingRoom, const RoomData &newRoom)
     {
-        if (newRoom.targetTemperature != 0.0)
-            existingRoom.targetTemperature = newRoom.targetTemperature;
-        if(docPins["usegaz"] == "true")
-        {
-            if (newRoom.targetTemperature != 0.0)
-            existingRoom.targetTemperature = newRoom.targetTemperature;
-        }
+        // Update Netatmo target temp if provided in newRoom (usually from fetchJsonData)
+        // Only update if the value is significantly different to avoid floating point noise if needed, or just update if non-zero
+        if (newRoom.targetTemperatureNetatmo != 0.0) // Or use a small epsilon comparison if needed
+            existingRoom.targetTemperatureNetatmo = newRoom.targetTemperatureNetatmo;
+
+        // Note: targetTemperatureFireplace is NOT updated here by default,
+        // it should be updated via setFireplaceTemperature or explicitly if needed.
+        // We keep the existing fireplace target unless specifically told otherwise.
 
         // Aktualizacja nazwy pokoju
         if (!newRoom.name.empty())
             existingRoom.name = newRoom.name;
         if (newRoom.ID != -1)
             existingRoom.ID = newRoom.ID;
-        if (newRoom.pinNumber != 0)
+        if (newRoom.pinNumber != 0) // Keep existing pin if new one is 0
             existingRoom.pinNumber = newRoom.pinNumber;
-        
-        if (newRoom.currentTemperature != 0.0)
+
+        if (newRoom.currentTemperature != 0.0) // Or use epsilon comparison
             existingRoom.currentTemperature = newRoom.currentTemperature;
         if(newRoom.battery_state != "")
             existingRoom.battery_state = newRoom.battery_state;
@@ -99,15 +101,17 @@ public:
             existingRoom.battery_level = newRoom.battery_level;
         if(newRoom.rf_strength != 0)
             existingRoom.rf_strength = newRoom.rf_strength;
-        if(newRoom.reachable != false)
-            existingRoom.reachable = newRoom.reachable;
+        // Always update reachable status
+        existingRoom.reachable = newRoom.reachable;
         if(newRoom.anticipating != "")
             existingRoom.anticipating = newRoom.anticipating;
+        // Always update forced status from newRoom data (usually comes from WebSocket update)
         existingRoom.forced = newRoom.forced;
 
-        // Obliczanie priorytetu
-        existingRoom.priority = existingRoom.targetTemperature - existingRoom.currentTemperature;
-
+        // Priority calculation might need adjustment based on which target temp is relevant
+        // For now, let's keep it based on Netatmo target, logic in main.cpp will use effective target.
+        // Or maybe calculate based on fireplace target? Let's stick to Netatmo for now for the stored 'priority' value.
+        existingRoom.priority = existingRoom.targetTemperatureNetatmo - existingRoom.currentTemperature;
     }
 
     RoomData getRoom(size_t index)
@@ -190,7 +194,8 @@ public:
             }
 
             // Oblicz priorytet dla przypadku, gdy nie ma pokoi wymuszonych
-            float roomPriority = room.targetTemperature - room.currentTemperature;
+            // Use Netatmo target for this calculation as decided earlier
+            float roomPriority = room.targetTemperatureNetatmo - room.currentTemperature;
             if (roomPriority > maxPriority)
             {
                 maxPriority = roomPriority;
@@ -212,7 +217,8 @@ public:
             roomObject["name"] = room.name;
             roomObject["id"] = room.ID;
             roomObject["pinNumber"] = room.pinNumber;
-            roomObject["targetTemperature"] = room.targetTemperature;
+            roomObject["targetTemperatureNetatmo"] = room.targetTemperatureNetatmo;
+            roomObject["targetTemperatureFireplace"] = room.targetTemperatureFireplace; // Add fireplace target
             roomObject["currentTemperature"] = room.currentTemperature;
             roomObject["forced"] = room.forced;
             roomObject["battery_state"] = room.battery_state;
@@ -220,10 +226,11 @@ public:
             roomObject["rf_strength"] = room.rf_strength;
             roomObject["reachable"] = room.reachable;
             roomObject["anticipating"] = room.anticipating;
-            roomObject["priority"] = room.targetTemperature - room.currentTemperature;
+            // Priority sent is based on Netatmo target, actual logic uses effective target
+            roomObject["priority"] = room.targetTemperatureNetatmo - room.currentTemperature;
             roomObject["valve"] = room.valve;
         }
-         
+
          // Kopiowanie docPins do meta w docx
         JsonObject meta = docx.createNestedObject("meta");
         meta.set(docPins.as<JsonObject>());
@@ -236,26 +243,39 @@ public:
         return jsonString;
     }
 
+    // Sets Netatmo target temperature and updates proxy
     void setTemperature(int roomID, float temp)
     {
-   
-       
+        // Update local Netatmo target first
+        bool roomFound = false;
+        for (auto &room : rooms) {
+            if (room.ID == roomID) {
+                room.targetTemperatureNetatmo = temp;
+                roomFound = true;
+                break;
+            }
+        }
+        if (!roomFound) {
+             Serial.printf("Room ID %d not found locally for setTemperature.\n", roomID);
+             // Optionally handle this case, maybe fetch data first?
+        }
 
-        Serial.printf("Setting temperature on \n", roomID, temp);
-   
-            if (WiFi.status() == WL_CONNECTED)
+        Serial.printf("Setting Netatmo temperature for room %d to %.1f\n", roomID, temp);
+
+        if (WiFi.status() == WL_CONNECTED)
         {
             WiFiClient client;
 
             HTTPClient http;
    
-            String url = "http://netatmo.adamkarski.art/setRoomTemperature?mode=manual&temperature="+String(temp)+"&room_id=" + String(roomID);
-            http.begin(client, url);   
+            // Note: Using String() for float conversion might lose precision, consider dtostrf if needed
+            String url = "http://netatmo.adamkarski.art/setRoomTemperature?mode=manual&temperature="+String(temp, 1)+"&room_id=" + String(roomID);
+            http.begin(client, url);
             int httpCode = http.GET();
-       
 
-            Serial.printf("HTTP GET request code: %d\n", httpCode);
-            Serial.printf("%s", url.c_str());
+
+            Serial.printf("Netatmo proxy setTemperature request code: %d\n", httpCode);
+            Serial.printf("URL: %s\n", url.c_str());
 
    
             Serial.println(http.getString());
@@ -263,18 +283,46 @@ public:
             http.end(); // Dodano http.end()
 
             // Pobierz aktualne dane po zmianie temperatury
-            fetchJsonData(api_url); // Dodano wywołanie fetchJsonData
-            
-            // Wyslij dane przez websocket
-           
+            // Consider adding error handling based on httpCode
+            if (httpCode < 0) {
+                 Serial.printf("HTTP GET request failed, error: %s\n", http.errorToString(httpCode).c_str());
+            } else {
+                 Serial.println(http.getString()); // Print proxy response
+            }
+
+            http.end(); // Dodano http.end()
+
+            // Fetch updated data from Netatmo after setting temperature
+            // Maybe add a small delay before fetching?
+            // delay(1000); // Optional delay
+            fetchJsonData(api_url); // Refresh local data
+
+            // Data will be broadcasted by the timer in main.cpp
         }
         else
         {
-            Serial.println("WiFi not connected");
+            Serial.println("WiFi not connected, cannot set Netatmo temperature.");
         }
     }
 
-    
+     // Sets Fireplace target temperature locally ONLY
+    void setFireplaceTemperature(int roomID, float temp) {
+        bool roomFound = false;
+        for (auto &room : rooms) {
+            if (room.ID == roomID) {
+                room.targetTemperatureFireplace = temp;
+                roomFound = true;
+                Serial.printf("Set fireplace target for room %d to %.1f\n", roomID, temp);
+                break;
+            }
+        }
+         if (!roomFound) {
+             Serial.printf("Room ID %d not found locally for setFireplaceTemperature.\n", roomID);
+         }
+         // No need to call Netatmo or fetch data here
+         // Data will be broadcasted by the timer in main.cpp
+    }
+
 
     void fetchJsonData(const char *url)
     {
@@ -330,14 +378,19 @@ public:
                         std::string name = room["name"].as<const char *>();
                         int id = room["id"].as<int>();
                         float currentTemperature = room["therm_measured_temperature"].as<float>();
-                        float targetTemperature = room["therm_setpoint_temperature"].as<float>();
-                        // Zachowaj wartość forced z istniejącego pokoju, jeśli istnieje
+                        float targetTemperatureNetatmo = room["therm_setpoint_temperature"].as<float>(); // This is Netatmo's target
+                        // Preserve existing forced status and fireplace target
                         bool forced = false;
+                        float targetTemperatureFireplace = 0.0; // Default if room doesn't exist yet
+                        int existingPinNumber = 0; // Default pin
+
                         // Sprawdź, czy pokój już istnieje w naszej kolekcji
                         for (const auto &existingRoom : this->rooms) {
                             if (existingRoom.ID == id) {
-                                forced = existingRoom.forced;
-                                break;
+                                forced = existingRoom.forced; // Keep existing forced status
+                                targetTemperatureFireplace = existingRoom.targetTemperatureFireplace; // Keep existing fireplace target
+                                existingPinNumber = existingRoom.pinNumber; // Keep existing pin number
+                                break; // Found the existing room
                             }
                         }
 
@@ -347,18 +400,20 @@ public:
                         String type = room["type"].as<const char *>();
                         bool reachable = room["reachable"].as<bool>();
                         String anticipating = room["anticipating"].as<const char *>();
-                        float priority = currentTemperature - targetTemperature;
-                        
+                        // Priority calculation is done in updateRoomParams
+
+                        // Determine pin number: use existing if available, otherwise map from ID
+                        int pinNumber = (existingPinNumber != 0) ? existingPinNumber : this->idToPinMap[id];
+                        if (pinNumber == 0 && existingPinNumber == 0) { // Check if ID was not in map initially
+                             Serial.printf("Warning: No pin mapping found for new room ID %d. Defaulting to 0.\n", id);
+                        }
 
 
-                        // Sprawdź przypisany pin na podstawie ID
-                        int pinNumber = this->idToPinMap[id];
-                        Serial.print("ID: ");
-                        Serial.print(id);
-                        Serial.print(", Pin: ");
-                        Serial.println(pinNumber);
+                        // Create RoomData object with both temperatures
+                        RoomData fetchedRoom(name, id, pinNumber, targetTemperatureNetatmo, targetTemperatureFireplace, currentTemperature, forced, battery_state, battery_level, rf_strength, reachable, anticipating);
 
-                        updateOrAddRoom(RoomData(name, id, pinNumber, targetTemperature, currentTemperature, forced, battery_state, battery_level, rf_strength, reachable, anticipating, priority));
+                        // Update or add the room
+                        updateOrAddRoom(fetchedRoom);
                     }
                 }
                 else

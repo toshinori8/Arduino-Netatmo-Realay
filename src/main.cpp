@@ -208,15 +208,18 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     if (docInput["command"] == "act_temperature")
     {
       int id = docInput["id"];
-      float targetTemperature = docInput["targetTemperature"];
-      bool forced = docInput["forced"];
-      manager.setTemperature(id, targetTemperature);
-     
+      float targetTemperatureNetatmo = docInput["targetTemperature"]; // Value from Slider 1
+      // This command always updates the Netatmo target
+      manager.setTemperature(id, targetTemperatureNetatmo);
+      // No need to check usegaz here, setTemperature handles the Netatmo update always.
+    }
 
-      if (docInput["usegaz"] == "false")
-      {
-        manager.setTemperature(id, targetTemperature);
-      }
+    // New command handler for Slider 2 (Fireplace Target)
+    if (docInput["command"] == "set_fireplace_target")
+    {
+        int id = docInput["id"];
+        float targetTemperatureFireplace = docInput["targetTemperatureFireplace"]; // Value from Slider 2
+        manager.setFireplaceTemperature(id, targetTemperatureFireplace); // Update local fireplace target only
     }
 
 
@@ -228,31 +231,37 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       
       // Znajdz Room ktorego ID == id 
       RoomData room = manager.getRoomByID(id);
-      // get pinNumber from room 
+      // get pinNumber from room
       int pinNumber = room.pinNumber;
       String pin = "pin_" + String(pinNumber);
 
-      float targetTemperature = docInput["targetTemperature"];
+      // float targetTemperature = docInput["targetTemperature"]; // This might be ambiguous now
       bool forced = docInput["forced"];
-     
+
       // if (forced ==0){forced="false";}else(forced="true");
-      room.forced = forced;
-      Serial.println("Forced in room.forced");
-      Serial.println(room.forced);
-
-
-
-      // room.forced =forced;
-
-      Serial.println(forced);
-      // Pobierz aktualne dane pokoju, aby nie stracić innych wartości
-      RoomData updatedRoom = manager.getRoomByID(id);
-      // Aktualizuj tylko forced i targetTemperature
-      updatedRoom.forced = forced;
-      if (targetTemperature > 0) {
-        updatedRoom.targetTemperature = targetTemperature;
+      // Update the forced status directly in the manager
+      // We don't need to update temperature here as that's handled by separate commands
+      RoomData updatedRoom = manager.getRoomByID(id); // Get existing data
+      if (updatedRoom.ID != -1) { // Check if room exists
+          updatedRoom.forced = forced; // Update only the forced status
+          manager.updateOrAddRoom(updatedRoom); // Use updateOrAddRoom to save the change
+          Serial.printf("Forced status for room %d set to %s\n", id, forced ? "true" : "false");
+      } else {
+          Serial.printf("Error: Room %d not found when trying to set forced status.\n", id);
       }
-      manager.updateOrAddRoom(updatedRoom);
+
+      // Update docPins for immediate UI feedback (though manifoldLogicNew will also update it)
+      // Ensure pinNumber is valid before accessing docPins
+      if (pinNumber >= 0 && pinNumber < 6) { // Assuming pins 0-5 are for rooms
+          String pinStr = "pin_" + String(pinNumber);
+          if (forced) {
+              docPins["pins"][pinStr]["state"] = "ON"; // Tentative state, logic will confirm
+              docPins["pins"][pinStr]["forced"] = "true";
+          } else {
+              docPins["pins"][pinStr]["state"] = "OFF";
+              docPins["pins"][pinStr]["forced"] = "false";
+          }
+      }
 
 
     if (forced)
@@ -306,143 +315,139 @@ void broadcastWebsocket()
 }
 
 
-void manifoldLogicNew()
-{
-    delay(400);
+void manifoldLogicNew() {
+    delay(400); // Keep delay?
 
-    // Pobierz wszystkie pokoje z RoomManager
+    // --- Gas/Pump Control ---
+    if (useGaz_) {
+        ExpOutput.digitalWrite(P6, LOW); // Gas/Pump ON (assuming LOW is ON for these pins)
+        ExpOutput.digitalWrite(P7, LOW);
+        docPins["piec_pompa"] = "ON"; // Assuming P7 is pump
+        docPins["led"] = "ON";        // Assuming P6 is LED/Gas valve indicator
+        Serial.println("Gas mode ON - P6/P7 LOW");
+    } else {
+        ExpOutput.digitalWrite(P6, HIGH); // Gas/Pump OFF (assuming HIGH is OFF)
+        ExpOutput.digitalWrite(P7, HIGH);
+        docPins["piec_pompa"] = "OFF";
+        docPins["led"] = "OFF";
+        Serial.println("Gas mode OFF - P6/P7 HIGH");
+    }
+
+    // --- Room Heating Logic ---
     const std::vector<RoomData>& rooms = manager.getAllRooms();
+    std::vector<int> forcedRoomsNeedingHeatIDs; // Store IDs of forced rooms needing heat
+    int primaryRoomId = -1;
+    float lowestTemp = 100.0;
+    int secondaryRoomId = -1;
+    float smallestPositiveDifference = 100.0;
 
-    // Flagi do śledzenia stanu
-    bool anyRoomNeedsHeating = false;
-    bool anyRoomForced = false;
-
-    // Zmienne do śledzenia pokoju z najniższą temperaturą wśród wymuszonych
-    int lowestTempForcedRoomId = -1;
-    float lowestTemp = 100.0; // Inicjalizacja wysoką wartością
-
-    // Zmienne do śledzenia pokoju z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
-    float maxPriority = -999.0;
-    int maxPriorityRoomId = -1;
-
-    // Przejdź przez wszystkie pokoje
+    // --- First Pass: Identify forced rooms needing heat and find the primary candidate ---
     for (const auto& room : rooms) {
-        // Oblicz priorytet (różnica między temperaturą docelową a aktualną)
-        float priority = room.targetTemperature - room.currentTemperature;
+        if (!room.forced) continue; // Skip non-forced rooms
 
-        // Sprawdź, czy pokój wymaga ogrzewania (temperatura docelowa > aktualna)
-        if (priority > 0) {
-            anyRoomNeedsHeating = true;
+        // Determine effective target temperature
+        float effectiveTargetTemperature;
+        if (useGaz_) {
+            effectiveTargetTemperature = max(room.targetTemperatureNetatmo, room.targetTemperatureFireplace);
+        } else {
+            effectiveTargetTemperature = room.targetTemperatureFireplace;
         }
 
-        // Sprawdź, czy pokój jest w trybie wymuszonym
-        if (room.forced) {
-            anyRoomForced = true;
+        // Check if room needs heating
+        if (room.currentTemperature < effectiveTargetTemperature) {
+            forcedRoomsNeedingHeatIDs.push_back(room.ID); // Add to list
 
-            // Sprawdź, czy ten pokój ma najniższą temperaturę wśród wymuszonych
+            // Check if this room has the lowest temperature so far
             if (room.currentTemperature < lowestTemp) {
                 lowestTemp = room.currentTemperature;
-                lowestTempForcedRoomId = room.ID;
+                primaryRoomId = room.ID;
             }
-        }
-
-        // Aktualizuj pokój z najwyższym priorytetem (dla przypadku gdy nie ma wymuszonych)
-        if (priority > maxPriority) {
-            maxPriority = priority;
-            maxPriorityRoomId = room.ID;
         }
     }
 
-    // Najpierw ustaw wszystkie piny na LOW (wyłączone)
-   if(anyRoomForced){
-    for (int i = 0; i < 6; i++) {
-        ExpOutput.digitalWrite(i, LOW); // LOW = OFF (odwrócona logika)
+    // --- Second Pass (if primary found): Find the secondary candidate ---
+    if (primaryRoomId != -1) {
+        for (int roomId : forcedRoomsNeedingHeatIDs) {
+            if (roomId == primaryRoomId) continue; // Skip the primary room
+
+            // Find the room data again (could optimize by storing pointers/references)
+            for (const auto& room : rooms) {
+                if (room.ID == roomId) {
+                     // Determine effective target temperature again (could optimize)
+                    float effectiveTargetTemperature;
+                    if (useGaz_) {
+                        effectiveTargetTemperature = max(room.targetTemperatureNetatmo, room.targetTemperatureFireplace);
+                    } else {
+                        effectiveTargetTemperature = room.targetTemperatureFireplace;
+                    }
+
+                    float difference = effectiveTargetTemperature - room.currentTemperature;
+                    if (difference > 0 && difference < smallestPositiveDifference) { // Must need heat and be smallest diff
+                        smallestPositiveDifference = difference;
+                        secondaryRoomId = roomId;
+                    }
+                    break; // Found the room data
+                }
+            }
+        }
+    }
+
+    // --- Control Relays ---
+    Serial.println("--- Heating Logic ---");
+    // Turn OFF all room relays initially
+    for (int i = 0; i < 6; i++) { // Assuming pins 0-5 control rooms
+        ExpOutput.digitalWrite(i, LOW); // LOW = OFF
         docPins["pins"]["pin_" + String(i)]["state"] = "OFF";
     }
-}
-    // Sprawdź, czy są pokoje w trybie wymuszonym
-    if (anyRoomForced && lowestTempForcedRoomId != -1) {
-        Serial.println("Tryb wymuszony aktywny - wybieranie pokoju z najniższą temperaturą");
 
-        // Znajdź pokój z najniższą temperaturą wśród wymuszonych
+    // Activate primary room relay
+    if (primaryRoomId != -1) {
         for (const auto& room : rooms) {
-            if (room.ID == lowestTempForcedRoomId) {
-                // Sprawdź, czy pokój potrzebuje ogrzewania (temperatura docelowa > aktualna)
-                float priority = room.targetTemperature - room.currentTemperature;
-
-                if (priority > 0) {  // Tylko jeśli pokój potrzebuje ogrzewania
-                    // Włącz odpowiedni pin dla pokoju z najniższą temperaturą wśród wymuszonych
-                    if (room.pinNumber >= 0 && room.pinNumber < 6) {
-                        // informacje w serial o ogrzewaniu
-                        Serial.print("Ogrzewanie w pokoju wymuszonym: ");
-                        Serial.println(room.name.c_str());
-                        Serial.print("Stan pinu: ");
-                        Serial.println(room.pinNumber);
-                        Serial.print("Temperatura aktualna: ");
-                        Serial.println(room.currentTemperature);
-                        Serial.print("Temperatura docelowa: ");
-                        Serial.println(room.targetTemperature);
-                        Serial.print("Priorytet (różnica): ");
-                        Serial.println(priority);
-
-                        ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON (odwrócona logika)
-                        docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
-                    }
-                } else {
-                    Serial.print("Pokój wymuszony nie potrzebuje ogrzewania: ");
-                    Serial.println(room.name.c_str());
-                    Serial.print("Temperatura aktualna: ");
-                    Serial.println(room.currentTemperature);
-                    Serial.print("Temperatura docelowa: ");
-                    Serial.println(room.targetTemperature);
-                }
-
-                // Zawsze ustawiamy forced na true, niezależnie od tego czy grzejemy
+            if (room.ID == primaryRoomId) {
                 if (room.pinNumber >= 0 && room.pinNumber < 6) {
-                    docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = "true";
-                }
-
-                break; // Znaleźliśmy pokój, więc możemy przerwać pętlę
-            }
-        }
-    
-        // Jeśli nie ma pokoi wymuszonych, ale są pokoje potrzebujące ogrzewania,
-        // wybierz pokój z najwyższym priorytetem
-        Serial.println("Brak pokoi wymuszonych - wybieranie pokoju z najwyższym priorytetem");
-
-        for (const auto& room : rooms) {
-            if (room.ID == maxPriorityRoomId) {
-                if (room.pinNumber >= 0 && room.pinNumber < 6) {
-                    Serial.print("Ogrzewanie w pokoju z najwyższym priorytetem: ");
-                    Serial.println(room.name.c_str());
-                    Serial.print("Stan pinu: ");
-                    Serial.println(room.pinNumber);
-                    Serial.print("Temperatura aktualna: ");
-                    Serial.println(room.currentTemperature);
-                    Serial.print("Temperatura docelowa: ");
-                    Serial.println(room.targetTemperature);
-                    Serial.print("Priorytet (różnica): ");
-                    Serial.println(room.targetTemperature - room.currentTemperature);
-
-                    ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON (odwrócona logika)
+                    ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON
                     docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
+                    Serial.printf("Primary heating ON: Room %s (Pin %d, Temp %.1f, Lowest Temp)\n",
+                                  room.name.c_str(), room.pinNumber, room.currentTemperature);
                 }
                 break;
             }
         }
     } else {
-        Serial.println("Brak pokoi wymagających ogrzewania lub brak pokoi wymuszonych z potrzebą ogrzewania");
+         Serial.println("No primary forced room needs heating.");
     }
 
-    // Aktualizuj stan forced dla wszystkich pokoi w docPins
+    // Activate secondary room relay
+    if (secondaryRoomId != -1) {
+         for (const auto& room : rooms) {
+            if (room.ID == secondaryRoomId) {
+                if (room.pinNumber >= 0 && room.pinNumber < 6) {
+                    // Check if it's the same pin as primary - avoid double logging if so
+                    if (primaryRoomId == -1 || room.pinNumber != manager.getRoomByID(primaryRoomId).pinNumber) {
+                         ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON
+                         docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
+                         Serial.printf("Secondary heating ON: Room %s (Pin %d, Temp %.1f, Smallest Diff %.1f)\n",
+                                      room.name.c_str(), room.pinNumber, room.currentTemperature, smallestPositiveDifference);
+                    } else {
+                         Serial.printf("Secondary room (%s) shares pin with primary. Already ON.\n", room.name.c_str());
+                    }
+                }
+                break;
+            }
+        }
+    } else if (primaryRoomId != -1) {
+        Serial.println("No suitable secondary forced room found.");
+    }
+
+
+    // --- Update docPins forced status and final room info ---
     for (const auto& room : rooms) {
         if (room.pinNumber >= 0 && room.pinNumber < 6) {
             docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = room.forced ? "true" : "false";
         }
     }
-
-    // Aktualizuj docPins z informacjami o pokojach
-    docPins["roomsInfo"] = manager.getRoomsAsJson();
+    docPins["roomsInfo"] = manager.getRoomsAsJson(); // Send updated state including valve status
+    Serial.println("--- End Heating Logic ---");
 }
 
 
