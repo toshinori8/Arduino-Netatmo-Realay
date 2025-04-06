@@ -128,6 +128,7 @@ class Room {
 
     const ecoButton = document.createElement("button");
     ecoButton.classList.add("action-button");
+    ecoButton.classList.add("eco-button");
     ecoButton.textContent = "Eco";
     ecoButton.addEventListener("click", () => this.sendCommand("eco"));
 
@@ -237,7 +238,7 @@ class Room {
             expandedCard.classList.remove("expanded");
           });
         card.classList.add("expanded");
-        document.body.style.overflow = "hidden";
+       // document.body.style.overflow = "hidden";
       }
     });
     return card;
