@@ -215,14 +215,14 @@ void blinkOutput(int timer)
   }
 }
 
-void useGaz(void)
-{
+// void useGaz(void)
+// {
 
-  ExpOutput.digitalWrite(P6, LOW); // LED ON
-  ExpOutput.digitalWrite(P7, LOW); // Pompa ON
-  docPins["piec_pompa"] = "ON";
-  docPins["led"] = "ON";
-}
+//   ExpOutput.digitalWrite(P6, LOW); // LED ON
+//   ExpOutput.digitalWrite(P7, LOW); // Pompa ON
+//   docPins["gaz"] = "ON";
+//   docPins["piec_pompa"] = "ON";
+// }
 // Funkcja do aktualizacji stanu przekaźnika
  StaticJsonDocument<500> stateDoc;
 void updateRelayState(int relayIndex, bool newState) {

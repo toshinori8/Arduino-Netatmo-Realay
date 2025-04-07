@@ -127,8 +127,8 @@ void useGaz(void)
 
   ExpOutput.digitalWrite(P6, LOW); // LED ON
   ExpOutput.digitalWrite(P7, LOW); // Pompa ON
+  docPins["gaz"] = "ON";
   docPins["piec_pompa"] = "ON";
-  docPins["led"] = "ON";
 }
 // Obsługa Websocket
 void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
@@ -444,8 +444,8 @@ void manifoldLogic()
     // Serial.println("Pump OFF");
     //   ExpOutput.digitalWrite(P6, HIGH); // LED OFF
     ExpOutput.digitalWrite(P7, HIGH); // Pompa OFF
+    //   doc["gaz"] = "OFF";
     //   doc["piec_pompa"] = "OFF";
-    //   doc["led"] = "OFF";
 
     // Serial.println("All valves OFF");
     for (int i = 0; i < 6; i++)

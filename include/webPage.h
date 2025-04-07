@@ -41,11 +41,11 @@
 
 
 body {
-   
-    background-image: linear-gradient(rgba(5, 5, 5, 0.2), rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2));
-    transition: all ease 0.5s;
-    min-height: 100vh;
-    transition: background-color 0.5s ease;
+   overflow: visible;
+   background-image: linear-gradient(rgba(5, 5, 5, 0.2), rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2));
+   transition: all ease 0.5s;
+   min-height: 100vh;
+   transition: background-color 0.5s ease;
 }
 
 
@@ -82,7 +82,10 @@ body {
       opacity: 1;
     }
   }
+.quick-actions .eco-button{
 
+    display: none;
+}
 
 .container .imageBack_container {
     position: fixed;
@@ -109,7 +112,7 @@ body.heating::before {
     position: absolute;
     top: 0px;
     right: 0px;
-    bottom: 0px;
+    bottom: -201px;
     left: 0px;
     opacity: 1;
     transition: all ease 1s;
@@ -117,7 +120,7 @@ body.heating::before {
     background-image: -moz-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
     background-image: -o-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
     background-image: linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
-    background-position: 100px;
+    background-position: 106px;
 }
 
 body::before {
@@ -142,10 +145,13 @@ body::before {
 .container {
     max-width: 480px;
     margin: 0 auto;
-    padding: 20px;
-    padding-bottom: 80px;
-    min-height: 100vh;
+    /* padding: 20px; */
+    /* min-height: 100vh; */
     position: relative;
+    /* overflow: scroll; */
+    /* padding-bottom: 0px; */
+    margin-bottom: 0px;
+    padding-bottom: 0px;
 }
 
 .thermostat-list {
@@ -1518,6 +1524,7 @@ button {
 
     const ecoButton = document.createElement("button");
     ecoButton.classList.add("action-button");
+    ecoButton.classList.add("eco-button");
     ecoButton.textContent = "Eco";
     ecoButton.addEventListener("click", () => this.sendCommand("eco"));
 
@@ -1627,7 +1634,7 @@ button {
             expandedCard.classList.remove("expanded");
           });
         card.classList.add("expanded");
-        document.body.style.overflow = "hidden";
+       // document.body.style.overflow = "hidden";
       }
     });
     return card;
@@ -1942,10 +1949,11 @@ function updateBodyHeatingClass() {
   const thermostatCards =
     thermostatList.getElementsByClassName("thermostat-card");
   let isHeating = false;
-
+  
   for (let card of thermostatCards) {
     // Check the data attribute set by updateHeatingIndicator
-    if (card.dataset.heating === "true") {
+    // if heating and forced are both true, it's considered heating
+    if (card.dataset.heating === "true"  && card.dataset.forced === "true") {
       isHeating = true;
       break;
     }

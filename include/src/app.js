@@ -553,10 +553,11 @@ function updateBodyHeatingClass() {
   const thermostatCards =
     thermostatList.getElementsByClassName("thermostat-card");
   let isHeating = false;
-
+  
   for (let card of thermostatCards) {
     // Check the data attribute set by updateHeatingIndicator
-    if (card.dataset.heating === "true") {
+    // if heating and forced are both true, it's considered heating
+    if (card.dataset.heating === "true"  && card.dataset.forced === "true") {
       isHeating = true;
       break;
     }

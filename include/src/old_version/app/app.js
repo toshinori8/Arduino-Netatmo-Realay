@@ -98,15 +98,15 @@ socket.onmessage = function (event) {
     for (const key in data) {
       // Pobranie elementu HTML o identyfikatorze równym nazwie właściwości (np. "pin_4")
 
-      // if (key == "piec_pompa") {
-      //   const iconHeat = document.querySelector(".iconHeat");
+      if (key == "gaz") {
+        const iconHeat = document.querySelector(".iconHeat");
 
-      //   if (data[key] == "ON") {
-      //     iconHeat.classList.add("active");
-      //   } else {
-      //     iconHeat.classList.remove("active");
-      //   }
-      // }
+        if (data[key] == "ON") {
+          iconHeat.classList.add("active");
+        } else {
+          iconHeat.classList.remove("active");
+        }
+      }
 
       if (key.includes("pin_")) {
 
