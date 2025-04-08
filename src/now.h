@@ -1,7 +1,7 @@
 #include <Arduino.h>
 // #include <ArduinoJson.h>
 
-float manifoldTemp;
+
 
 
 void onDataRecv(uint8_t *mac, uint8_t *data, uint8_t len) {

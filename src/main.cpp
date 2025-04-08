@@ -25,7 +25,26 @@ StaticJsonDocument<200> docInput;
 #include <now.h>
 
 // --- EEPROM Settings ---
-#define MAX_ROOMS_EEPROM 8 // Max rooms to save in EEPROM
+#define MAX_ROOMS_EEPROM 6 // Max rooms to save in EEPROM (Adjusted to 6 based on user feedback)
+
+// Define EEPROM Addresses
+const int ADDR_MAGIC = 0;
+const int ADDR_USE_GAZ = ADDR_MAGIC + sizeof(byte);
+const int ADDR_ROOM_COUNT = ADDR_USE_GAZ + sizeof(bool);
+const int ADDR_ROOM_DATA_START = ADDR_ROOM_COUNT + sizeof(byte);
+
+// Calculate size needed for one room's data
+const int ROOM_DATA_SIZE = sizeof(int) + sizeof(int) + sizeof(bool) + sizeof(float); // id, pin, forced, temp (4+4+1+4 = 13 bytes)
+
+// Calculate total EEPROM size needed
+// const int EEPROM_SIZE = ADDR_ROOM_DATA_START + (MAX_ROOMS_EEPROM * ROOM_DATA_SIZE); // 3 + (6 * 13) = 81 bytes
+const int EEPROM_SIZE = 62; // Use 62 bytes as requested by user
+
+#define MAX_ROOMS_EEPROM 4 // Max rooms to save in EEPROM (Adjusted to 4 based on 62-byte limit)
+
+const byte EEPROM_MAGIC_VALUE = 0xAB; // Choose a magic byte value
+
+/* // Old struct definitions (replaced by individual reads/writes)
 struct RoomSettings {
     int id;
     int pinNumber;
@@ -38,9 +57,7 @@ struct EepromSettings {
     byte roomCount;
     RoomSettings rooms[MAX_ROOMS_EEPROM];
 };
-const int EEPROM_ADDR = 0;
-const byte EEPROM_MAGIC_VALUE = 0xAB; // Choose a magic byte value
-const int EEPROM_SIZE = sizeof(EepromSettings);
+*/
 // --- End EEPROM Settings ---
 
 const char thingName[] = "Netatmo_Relay";
@@ -96,114 +113,170 @@ void prepareDataForWebServer()
 
 // --- EEPROM Save/Load Functions ---
 
-// Saves current settings (useGaz and room data) to EEPROM
-void saveSettings(RoomManager& mgr, bool currentUseGaz) {
-    Serial.println("Saving settings to EEPROM...");
-    EepromSettings settingsToSave;
+// Saves current settings (useGaz and room data) to EEPROM using individual writes, single commit
+void saveSettings(RoomManager &mgr, bool currentUseGaz)
+{
+  Serial.println("Saving settings to EEPROM (individual fields)...");
 
-    settingsToSave.magic = EEPROM_MAGIC_VALUE;
-    settingsToSave.useGaz = currentUseGaz;
+  // 1. Write Magic Byte
+  EEPROM.put(ADDR_MAGIC, EEPROM_MAGIC_VALUE);
+  Serial.printf("  Putting Magic Byte: 0x%X at Addr: %d\n", EEPROM_MAGIC_VALUE, ADDR_MAGIC);
+  if (!EEPROM.commit())
+  {
+    Serial.println("ERROR! EEPROM commit failed after magic byte");
+  }
 
-    const std::vector<RoomData>& currentRooms = mgr.getAllRooms();
-    settingsToSave.roomCount = min((byte)currentRooms.size(), (byte)MAX_ROOMS_EEPROM);
-    Serial.printf("Saving %d rooms to EEPROM.\n", settingsToSave.roomCount);
+  // 2. Write useGaz flag
+  EEPROM.put(ADDR_USE_GAZ, currentUseGaz);
+  Serial.printf("  Putting useGaz: %s at Addr: %d\n", currentUseGaz ? "true" : "false", ADDR_USE_GAZ);
+  if (!EEPROM.commit())
+  {
+    Serial.println("ERROR! EEPROM commit failed after useGaz");
+  }
 
-    for (byte i = 0; i < settingsToSave.roomCount; ++i) {
-        settingsToSave.rooms[i].id = currentRooms[i].ID;
-        settingsToSave.rooms[i].pinNumber = currentRooms[i].pinNumber;
-        settingsToSave.rooms[i].forced = currentRooms[i].forced;
-        settingsToSave.rooms[i].targetTemperatureFireplace = currentRooms[i].targetTemperatureFireplace;
-         Serial.printf("  Saving Room ID: %d, Pin: %d, Forced: %s, Fireplace Temp: %.1f\n",
-                      settingsToSave.rooms[i].id, settingsToSave.rooms[i].pinNumber,
-                      settingsToSave.rooms[i].forced ? "true" : "false", settingsToSave.rooms[i].targetTemperatureFireplace);
-    }
-     // Clear remaining slots if fewer rooms than MAX_ROOMS_EEPROM
-    for (byte i = settingsToSave.roomCount; i < MAX_ROOMS_EEPROM; ++i) {
-        settingsToSave.rooms[i].id = -1; // Mark as invalid/empty
-        settingsToSave.rooms[i].pinNumber = 0;
-        settingsToSave.rooms[i].forced = false;
-        settingsToSave.rooms[i].targetTemperatureFireplace = 0.0;
-    }
+  // 3. Write Room Count
+  const std::vector<RoomData> &currentRooms = mgr.getAllRooms();
+  byte roomCountToSave = min((byte)currentRooms.size(), (byte)MAX_ROOMS_EEPROM);
+  EEPROM.put(ADDR_ROOM_COUNT, roomCountToSave);
+  Serial.printf("  Putting roomCount: %d at Addr: %d\n", roomCountToSave, ADDR_ROOM_COUNT);
+  if (!EEPROM.commit())
+  {
+    Serial.println("ERROR! EEPROM commit failed after room count");
+  }
+  Serial.printf("Saving %d rooms to EEPROM.\n", roomCountToSave);
 
+  // 4. Write Room Data
+  int currentAddr = ADDR_ROOM_DATA_START;
+  for (byte i = 0; i < roomCountToSave; ++i)
+  {
+    int roomId = currentRooms[i].ID;
+    int roomPin = currentRooms[i].pinNumber;
+    bool roomForced = currentRooms[i].forced;
+    float roomFireplaceTemp = currentRooms[i].targetTemperatureFireplace;
 
-    EEPROM.put(EEPROM_ADDR, settingsToSave);
-    if (EEPROM.commit()) {
-        Serial.println("EEPROM successfully committed");
-    } else {
-        Serial.println("ERROR! EEPROM commit failed");
-    }
+    Serial.printf("  Putting Room ID: %d, Pin: %d, Forced: %s, Fireplace Temp: %.1f at Addr: %d\n",
+                  roomId, roomPin, roomForced ? "true" : "false", roomFireplaceTemp, currentAddr);
+
+    EEPROM.put(currentAddr, roomId);
+    Serial.printf("  Putting Room ID: %d at Addr: %d\n", roomId, currentAddr);
+    currentAddr += sizeof(int);
+
+    EEPROM.put(currentAddr, roomPin);
+    Serial.printf("  Putting Room Pin: %d at Addr: %d\n", roomPin, currentAddr - sizeof(int));
+    currentAddr += sizeof(int);
+
+    EEPROM.put(currentAddr, roomForced);
+    Serial.printf("  Putting Room Forced: %s at Addr: %d\n", roomForced ? "true" : "false", currentAddr - sizeof(int));
+    currentAddr += sizeof(bool);
+
+    EEPROM.put(currentAddr, roomFireplaceTemp);
+    Serial.printf("  Putting Room FireplaceTemp: %.1f at Addr: %d\n", roomFireplaceTemp, currentAddr - sizeof(float));
+    currentAddr += sizeof(float);
+  }
+  Serial.printf("Finished putting fields. Last write Addr: %d. Attempting commit...\n", currentAddr - sizeof(float)); // Debug last address used
+
+  // 5. Commit all changes once at the end
+  if (EEPROM.commit())
+  {
+    Serial.println("EEPROM successfully committed");
+  }
+  else
+  {
+    Serial.println("ERROR! EEPROM commit failed after writing all data.");
+    // Note: currentAddr here is the address *after* the last write.
+    // The actual failure point during commit isn't directly reported by the library.
+  }
 }
 
-// Loads settings from EEPROM and updates manager and useGaz_
+// Loads settings from EEPROM using individual reads and updates manager and useGaz_
 // Returns true if successful (magic byte matched), false otherwise
-bool loadSettings(RoomManager& mgr) {
-    Serial.println("Loading settings from EEPROM...");
-    EepromSettings loadedSettings;
-    EEPROM.get(EEPROM_ADDR, loadedSettings);
+bool loadSettings(RoomManager &mgr)
+{
+  Serial.println("Loading settings from EEPROM (individual fields)...");
 
-    if (loadedSettings.magic != EEPROM_MAGIC_VALUE) {
-        Serial.println("EEPROM magic byte mismatch! Using default settings.");
-        return false; // Indicate failure to load valid settings
+  // 1. Read and Check Magic Byte
+  byte magic = 0; // Initialize to prevent compiler warning
+  EEPROM.get(ADDR_MAGIC, magic);
+  if (magic != EEPROM_MAGIC_VALUE)
+  {
+    Serial.println("EEPROM magic byte mismatch! Using default settings.");
+    return false; // Indicate failure to load valid settings
+  }
+  Serial.println("EEPROM magic byte matched. Applying settings.");
+
+  // 2. Read useGaz flag
+  EEPROM.get(ADDR_USE_GAZ, useGaz_);
+  docPins["usegaz"] = useGaz_ ? "true" : "false"; // Update JSON doc
+  Serial.printf("Loaded useGaz_ = %s\n", useGaz_ ? "true" : "false");
+
+  // 3. Read Room Count
+  byte roomCountToLoad = 0; // Initialize to prevent compiler warning
+  EEPROM.get(ADDR_ROOM_COUNT, roomCountToLoad);
+  Serial.printf("Loading %d rooms from EEPROM.\n", roomCountToLoad);
+
+  // 4. Read Room Data
+  int currentAddr = ADDR_ROOM_DATA_START;
+  for (byte i = 0; i < roomCountToLoad; ++i)
+  {
+    int loadedId;
+    int loadedPin;
+    bool loadedForced;
+    float loadedFireplaceTemp;
+
+    EEPROM.get(currentAddr, loadedId);
+    currentAddr += sizeof(int);
+    EEPROM.get(currentAddr, loadedPin);
+    currentAddr += sizeof(int);
+    EEPROM.get(currentAddr, loadedForced);
+    currentAddr += sizeof(bool);
+    EEPROM.get(currentAddr, loadedFireplaceTemp);
+    currentAddr += sizeof(float);
+
+    Serial.printf("  Room ID: %d, Pin: %d, Forced: %s, Fireplace Temp: %.1f at Addr: %d\n",
+                  loadedId, loadedPin, loadedForced ? "true" : "false", loadedFireplaceTemp, ADDR_ROOM_DATA_START + i * ROOM_DATA_SIZE);
+    // Update pin mapping in the manager FIRST
+    mgr.idToPinMap[loadedId] = loadedPin;
+
+    // Now try to update the room data if it exists (it might not exist yet if fetch hasn't run)
+    bool roomFound = false;
+    // Get a mutable reference to the rooms vector
+    std::vector<RoomData> &mgrRooms = const_cast<std::vector<RoomData> &>(mgr.getAllRooms());
+    for (auto &room : mgrRooms)
+    {
+      if (room.ID == loadedId)
+      {
+        room.pinNumber = loadedPin; // Update pin number based on loaded data
+        room.forced = loadedForced;
+        room.targetTemperatureFireplace = loadedFireplaceTemp;
+        Serial.printf("  Applied settings to existing room %d\n", loadedId);
+        roomFound = true;
+        break;
+      }
     }
-
-    Serial.println("EEPROM magic byte matched. Applying settings.");
-    useGaz_ = loadedSettings.useGaz;
-    docPins["usegaz"] = useGaz_ ? "true" : "false"; // Update JSON doc
-    Serial.printf("Loaded useGaz_ = %s\n", useGaz_ ? "true" : "false");
-
-    Serial.printf("Loading %d rooms from EEPROM.\n", loadedSettings.roomCount);
-    for (byte i = 0; i < loadedSettings.roomCount; ++i) {
-         if (loadedSettings.rooms[i].id == -1) continue; // Skip empty slots if any
-
-        int loadedId = loadedSettings.rooms[i].id;
-        int loadedPin = loadedSettings.rooms[i].pinNumber;
-        bool loadedForced = loadedSettings.rooms[i].forced;
-        float loadedFireplaceTemp = loadedSettings.rooms[i].targetTemperatureFireplace;
-
-        Serial.printf("  Room ID: %d, Pin: %d, Forced: %s, Fireplace Temp: %.1f\n",
-                      loadedId, loadedPin, loadedForced ? "true" : "false", loadedFireplaceTemp);
-
-        // Update pin mapping in the manager FIRST
-        mgr.idToPinMap[loadedId] = loadedPin;
-
-        // Now try to update the room data if it exists (it might not exist yet if fetch hasn't run)
-        bool roomFound = false;
-        // Get a mutable reference to the rooms vector
-        std::vector<RoomData>& mgrRooms = const_cast<std::vector<RoomData>&>(mgr.getAllRooms());
-        for (auto& room : mgrRooms) {
-             if (room.ID == loadedId) {
-                 room.pinNumber = loadedPin; // Update pin number based on loaded data
-                 room.forced = loadedForced;
-                 room.targetTemperatureFireplace = loadedFireplaceTemp;
-                 Serial.printf("  Applied settings to existing room %d\n", loadedId);
-                 roomFound = true;
-                 break;
-             }
-        }
-         if (!roomFound) {
-             // If the room doesn't exist in the manager's list yet,
-             // we still updated the pin map. The fetchJsonData function, when it runs,
-             // should create the room. The updateOrAddRoom logic needs to be checked
-             // to ensure it preserves the loaded fireplace temp and forced status
-             // if the fetched data doesn't override them.
-             // Let's create a placeholder room now to ensure the data is stored.
-             // We'll use default values for fields not stored in EEPROM.
-             Serial.printf("  Room %d not found in manager, creating placeholder with loaded settings.\n", loadedId);
-             RoomData placeholderRoom;
-             placeholderRoom.ID = loadedId;
-             placeholderRoom.pinNumber = loadedPin;
-             placeholderRoom.forced = loadedForced;
-             placeholderRoom.targetTemperatureFireplace = loadedFireplaceTemp;
-             // Set other fields to defaults or leave them as initialized by RoomData()
-             placeholderRoom.name = "Loaded Room " + String(loadedId).c_str(); // Placeholder name
-             mgr.addRoom(placeholderRoom); // Add the placeholder
-         }
+    if (!roomFound)
+    {
+      // If the room doesn't exist in the manager's list yet,
+      // we still updated the pin map. The fetchJsonData function, when it runs,
+      // should create the room. The updateOrAddRoom logic needs to be checked
+      // to ensure it preserves the loaded fireplace temp and forced status
+      // if the fetched data doesn't override them.
+      // Let's create a placeholder room now to ensure the data is stored.
+      // We'll use default values for fields not stored in EEPROM.
+      Serial.printf("  Room %d not found in manager, creating placeholder with loaded settings.\n", loadedId);
+      RoomData placeholderRoom;
+      placeholderRoom.ID = loadedId;
+      placeholderRoom.pinNumber = loadedPin;
+      placeholderRoom.forced = loadedForced;
+      placeholderRoom.targetTemperatureFireplace = loadedFireplaceTemp;
+      // Set other fields to defaults or leave them as initialized by RoomData()
+      placeholderRoom.name = std::string("Loaded Room ") + std::to_string(loadedId); // Placeholder name
+      mgr.addRoom(placeholderRoom);                                                  // Add the placeholder
     }
+  }
 
-    return true; // Indicate successful load
+  return true; // Indicate successful load
 }
 // --- End EEPROM Save/Load Functions ---
-
 
 void handleRoot()
 {
@@ -220,11 +293,26 @@ void fetchNetatmo()
 }
 
 // utworzenie obiektu klasy Timers z trzema odliczającymi
-Timers<3> timers;
+Timers<4> timers;
 
 // obiekty ekspanderów PCF8574
 PCF8574 ExpInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
 PCF8574 ExpOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
+
+// AHT10 INIT;
+#include <Adafruit_AHTX0.h>
+Adafruit_AHTX0 aht;
+sensors_event_t humidity, temp;
+  
+void readAHT()
+{
+  aht.getEvent(&humidity, &temp);
+  // acces temperature and humidity
+//manifoldTemp
+  
+ docPins["manifoldTemp"]=String(temp.temperature);
+   
+}
 
 void otaStart();
 void initInputExpander()
@@ -343,7 +431,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       int id = docInput["id"];
       float targetTemperatureFireplace = docInput["targetTemperatureFireplace"]; // Value from Slider 2
       manager.setFireplaceTemperature(id, targetTemperatureFireplace);           // Update local fireplace target only
-      saveSettings(manager, useGaz_); // Save after change
+      saveSettings(manager, useGaz_);                                            // Save after change
     }
 
     // }
@@ -440,16 +528,17 @@ void broadcastWebsocket()
   webSocket.broadcastTXT(data);
 }
 
- // relayMode LOW/HIGH = ON/OFF function
-void relayMode(uint8_t state) {
-  for (int i = 0; i < 6; i++) {
-    ExpOutput.digitalWrite(i, state); // LOW = ON, HIGH = OFF 
+// relayMode LOW/HIGH = ON/OFF function
+void relayMode(uint8_t state)
+{
+  for (int i = 0; i < 6; i++)
+  {
+    ExpOutput.digitalWrite(i, state); // LOW = ON, HIGH = OFF
   }
 }
 
 void manifoldLogicNew()
 {
-  
 
   // --- Room Heating Logic ---
   const std::vector<RoomData> &rooms = manager.getAllRooms();
@@ -530,7 +619,7 @@ void manifoldLogicNew()
   Serial.println("--- Heating Logic ---");
   // Turn OFF all room relays initially
   for (int i = 0; i < 6; i++)
-  {                                
+  {
     ExpOutput.digitalWrite(i, HIGH); // LOW = OFF
     docPins["pins"]["pin_" + String(i)]["state"] = "OFF";
   }
@@ -560,38 +649,37 @@ void manifoldLogicNew()
   }
 
   // Activate secondary room relay
-  // if (secondaryRoomId != -1)
-  // {
-  //   for (const auto &room : rooms)
-  //   {
-  //     if (room.ID == secondaryRoomId)
-  //     {
-  //       if (room.pinNumber >= 0 && room.pinNumber < 6)
-  //       {
-  //         // Check if it's the same pin as primary - avoid double logging if so
-  //         if (primaryRoomId == -1 || room.pinNumber != manager.getRoomByID(primaryRoomId).pinNumber)
-  //         { 
-  //           relayMode(LOW);
-  //           ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = OFF
-  //           docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
-  //           Serial.printf("Secondary heating ON: Room %s (Pin %d, Temp %.1f, Smallest Diff %.1f)\n",
-  //                         room.name.c_str(), room.pinNumber, room.currentTemperature, smallestPositiveDifference);
-  //         }
-  //         else
-  //         {
-  //           Serial.printf("Secondary room (%s) shares pin with primary. Already ON.\n", room.name.c_str());
-  //         }
-  //       }
-  //       break;
-  //     }
-  //   }
-  // }
-  // else if (primaryRoomId != -1)
-  // {
-  //   Serial.println("No suitable secondary forced room found.");
-  //   relayMode(HIGH);
-
-  // }
+  if (secondaryRoomId != -1)
+  {
+    for (const auto &room : rooms)
+    {
+      if (room.ID == secondaryRoomId)
+      {
+        if (room.pinNumber >= 0 && room.pinNumber < 6)
+        {
+          // Check if it's the same pin as primary - avoid double logging if so
+          if (primaryRoomId == -1 || room.pinNumber != manager.getRoomByID(primaryRoomId).pinNumber)
+          {
+            //  relayMode(LOW);
+            ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = OFF
+                                                          //  docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
+            Serial.printf("Secondary heating ON: Room %s (Pin %d, Temp %.1f, Smallest Diff %.1f)\n",
+                          room.name.c_str(), room.pinNumber, room.currentTemperature, smallestPositiveDifference);
+          }
+          else
+          {
+            Serial.printf("Secondary room (%s) shares pin with primary. Already ON.\n", room.name.c_str());
+          }
+        }
+        break;
+      }
+    }
+  }
+  else if (primaryRoomId != -1)
+  {
+    Serial.println("No suitable secondary forced room found.");
+    relayMode(HIGH);
+  }
 
   // --- Gas/Pump Control ---
 
@@ -601,7 +689,7 @@ void manifoldLogicNew()
 
     ExpOutput.digitalWrite(P6, LOW);
     ExpOutput.digitalWrite(P7, LOW);
-    
+
     Serial.println("Gas mode ON - P6/P7 ON");
   }
   // ONLY KOMINEK
@@ -609,7 +697,7 @@ void manifoldLogicNew()
   {
     ExpOutput.digitalWrite(P6, HIGH);
     ExpOutput.digitalWrite(P7, LOW);
-   
+
     Serial.println("Gas mode OFF - P6 OFF / P7 ON ");
   }
   // else if no primary room, turn off gas/pump
@@ -617,7 +705,7 @@ void manifoldLogicNew()
   {
     ExpOutput.digitalWrite(P6, HIGH);
     ExpOutput.digitalWrite(P7, HIGH);
-   
+
     Serial.println("Gas mode OFF NO HEATING - P6/P7 OFF");
   }
 
@@ -663,26 +751,35 @@ void setup()
 
   pinMode(CONFIG_PIN, INPUT_PULLUP);
   Serial.begin(115200);
-  while (!Serial) { delay(10); } // Wait for serial connection
+  while (!Serial)
+  {
+    delay(10);
+  } // Wait for serial connection
   Serial.println("\nStarting up...");
 
-   // -- Initialize EEPROM --
-  EEPROM.begin(EEPROM_SIZE);
+
+if (!aht.begin()) {
+    Serial.println("Nie wykryto AHT10!");
+    while (1) delay(10);
+  }
+
+
+  // -- Initialize EEPROM --
+  EEPROM.begin(EEPROM_SIZE); // Use the requested size (512)
   Serial.printf("EEPROM size requested: %d bytes\n", EEPROM_SIZE);
 
-
   // -- Load settings or initialize EEPROM --
-  if (!loadSettings(manager)) {
-      // EEPROM not initialized or data corrupted, save defaults
-      Serial.println("Initializing EEPROM with default settings...");
-      useGaz_ = false; // Default value
-      // Manager defaults (like initial pin map) are set in its constructor.
-      // We save the current state which includes these defaults.
-      saveSettings(manager, useGaz_);
+  if (!loadSettings(manager))
+  {
+    // EEPROM not initialized or data corrupted, save defaults
+    Serial.println("Initializing EEPROM with default settings...");
+    useGaz_ = false; // Default value
+    // Manager defaults (like initial pin map) are set in its constructor.
+    // We save the current state which includes these defaults.
+    saveSettings(manager, useGaz_);
   }
-   // Update docPins based on potentially loaded useGaz_ value AFTER loading attempt
+  // Update docPins based on potentially loaded useGaz_ value AFTER loading attempt
   docPins["usegaz"] = useGaz_ ? "true" : "false";
-
 
   // -- Initializing the network configuration --
   readInitWifiConfig(); // Reads default WiFi creds, might be overwritten by saved config
@@ -732,8 +829,6 @@ void setup()
     Serial.println("error");
   }
 
-  initInputExpander();
-
   Serial.print("Init output Expander...");
   if (ExpOutput.begin())
   {
@@ -755,10 +850,25 @@ void setup()
   }
   esp_now_register_recv_cb(onDataRecv);
 
+#if defined(ESP8266) || defined(ESP32)
+  int eepromSize = 512; // Change based on board
+  EEPROM.begin(eepromSize);
+#endif
+
+  Serial.println("EEPROM content:");
+  for (int i = 0; i < 64; i++)
+  {
+    Serial.print("Address ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(EEPROM.read(i));
+  }
+
   // Inicjalizacja timera
-  timers.attach(0, 35000, fetchNetatmo);
+  timers.attach(0, 65000, fetchNetatmo);
   timers.attach(1, 12000, broadcastWebsocket);
   timers.attach(2, 20000, manifoldLogicNew);
+  timers.attach(4, 50000, readAHT);
 }
 
 void loop()

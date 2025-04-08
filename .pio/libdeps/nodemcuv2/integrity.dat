@@ -1,4 +1,5 @@
+adafruit/Adafruit AHTX0@^2.0.5
 prampec/IotWebConf@^3.2.1
-bblanchon/ArduinoJson@^6.19.4
 xreef/PCF8574 library@^2.3.4
+bblanchon/ArduinoJson@^6.19.4
 links2004/WebSockets@^2.3.7

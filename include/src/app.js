@@ -42,18 +42,6 @@ class Room {
     if (!document.getElementById('valve-indicator-style')) {
       const style = document.createElement('style');
       style.id = 'valve-indicator-style';
-      style.textContent = `
-        .valve-indicator {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: #00a2ff;
-          position: absolute;
-          top: 184px;
-          right: 40px;
-          animation: pulse 0.9s infinite;
-        }
-      `;
       document.head.appendChild(style);
     }
 
@@ -116,13 +104,13 @@ class Room {
     });
 
     // skopiuj ikonke svg a_fire
-    const fireButtonSvgCopy = document
+    /* const fireButtonSvgCopy = document
       .querySelector("footer .a_fire")
-      .cloneNode(true);
+      .cloneNode(true); */
 
-    fireButton.classList.add("action-button", "a_fire");
-    fireButton.appendChild(fireButtonSvgCopy);
-    console.log(fireButtonSvgCopy);
+    // fireButton.classList.add("action-button", "a_fire");
+    // fireButton.appendChild(fireButtonSvgCopy);
+    // console.log(fireButtonSvgCopy);
 
 
 
@@ -591,7 +579,12 @@ function handleWebSocketMessage(data) {
          console.log("Updated useGazState:", window.useGazState);
     }
 
-
+  if(parsedData.meta){
+        //footer .a_fire .manifoldTemp
+        el = document.querySelector("footer .a_fire .manifoldTemp");;
+        manifoldTemperature = parsedData.meta.manifoldTemp;
+        el.innerHTML = manifoldTemperature + "°C";
+  }
   if (parsedData.rooms) {
     const roomData = parsedData.rooms;
     roomData.forEach((room) => {
@@ -683,15 +676,38 @@ function handleWebSocketMessage(data) {
 let ws;
 const wsStatusElement = document.getElementById("ws-status");
 
+function setWsStatus(status) {
+    if (!wsStatusElement) return;
+    wsStatusElement.classList.remove("ws-connected", "ws-disconnected", "ws-error");
+    switch (status) {
+        case "connected":
+            wsStatusElement.classList.add("ws-connected");
+            wsStatusElement.title = "Połączono z WebSocket";
+            break;
+        case "disconnected":
+            wsStatusElement.classList.add("ws-disconnected");
+            wsStatusElement.title = "Rozłączono WebSocket, próba ponownego połączenia...";
+            break;
+        case "error":
+            wsStatusElement.classList.add("ws-error");
+            wsStatusElement.title = "Błąd połączenia WebSocket";
+            break;
+        default:
+             wsStatusElement.classList.add("ws-disconnected");
+             wsStatusElement.title = "Rozłączono WebSocket";
+    }
+}
+
+
 function connectWebSocket() {
   //  ws = new WebSocket("ws://192.168.8.47:81");
-  ws = new WebSocket("ws://netatmo_relay.local:81");
+  ws = new WebSocket("ws://netatmo_relay.local:81"); // Use mDNS name
+
   ws.onopen = function (event) {
     console.log("WebSocket connection opened:", event);
-    wsStatusElement.classList.add("connected");
-    // wsStatusElement.querySelector('span').textContent = 'WS Connected';
-    // Send a message to the server
-    ws.send(JSON.stringify({ message: "Hello Server!" }));
+    setWsStatus("connected");
+    // Send a message to the server if needed
+    // ws.send(JSON.stringify({ message: "Hello Server!" }));
   };
 
   ws.onmessage = function (event) {
@@ -701,20 +717,22 @@ function connectWebSocket() {
 
   ws.onclose = function (event) {
     console.log("WebSocket connection closed:", event);
-    wsStatusElement.classList.remove("connected");
-    // wsStatusElement.querySelector('span').textContent = 'WS Disconnected';
+    setWsStatus("disconnected");
     // Ponowne połączenie po 5 sekundach
-    setTimeout(connectWebSocket, 500);
+    setTimeout(connectWebSocket, 5000); // Increased timeout to 5s
   };
 
   ws.onerror = function (error) {
     console.error("WebSocket error:", error);
+    setWsStatus("error");
+    // onclose will likely be called after onerror, attempting reconnect
   };
 }
 
 // Nawiązanie połączenia WebSocket przy całkowitym załadowaniu strony
 
 document.addEventListener("DOMContentLoaded", function () {
+  setWsStatus("disconnected"); // Set initial state
   connectWebSocket();
   console.log("DOM fully loaded and parsed");
 

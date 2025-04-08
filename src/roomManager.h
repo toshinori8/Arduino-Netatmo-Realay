@@ -41,10 +41,10 @@ class RoomManager
 public:
     RoomManager() : requestInProgress(false) {
         // Inicjalizacja domyślnego mapowania ID na piny
-        idToPinMap[1812451076] = 1;  // ŁAZIENKA
-        idToPinMap[206653929] = 2;   // KUCHNIA
-        idToPinMap[1868270675] = 3;   // AE SYPIALNIA
-        idToPinMap[38038562] = 4;    // WALERIA
+        idToPinMap[1812451076] = 0;  // ŁAZIENKA
+        idToPinMap[206653929] = 1;   // KUCHNIA
+        idToPinMap[1868270675] = 2;   // AE SYPIALNIA
+        idToPinMap[38038562] = 3;    // WALERIA
     }
 
     void addRoom(const RoomData &room)
