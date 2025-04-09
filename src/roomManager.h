@@ -106,7 +106,13 @@ public:
         if(newRoom.anticipating != "")
             existingRoom.anticipating = newRoom.anticipating;
         // Always update forced status from newRoom data (usually comes from WebSocket update)
+        
         existingRoom.forced = newRoom.forced;
+        if (newRoom.valve != existingRoom.valve)
+        {
+            existingRoom.valve = newRoom.valve;
+        }
+        
 
         // Priority calculation might need adjustment based on which target temp is relevant
         // For now, let's keep it based on Netatmo target, logic in main.cpp will use effective target.

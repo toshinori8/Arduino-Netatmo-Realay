@@ -1389,13 +1389,18 @@ button {
         <!-- Zawartość zakładki USTAWIENIA -->
         <div class="tab-content" id="settings-tab" style="display: none;">
           <div class="settings-container">
-            <h3>Ustawienia ogólne</h3>
+            
             <div class="setting-item">
+              <label>Minimalna temperatura włączenia:</label>
+              
+              <input type="number" class="minOperatingTemp" >
+              </br>
               <label>Tryb pracy:</label>
               <select id="workMode">
                 <option value="auto">Automatyczny</option>
                 <option value="manual">Manualny</option>
-              </select>
+              </select></br>
+            
             </div>
           </div>
         </div>
@@ -1886,6 +1891,14 @@ button {
       console.log("Sending fireplace command:", message);
       ws.send(JSON.stringify(message));
   }
+  sendMinimalTemperature(){
+    temp= document.querySelector("#configModal .minOperatingTemp").value;
+    if(temp != ""){
+       ws.send(JSON.stringify({ command: "minOperatingTemp", value: temp}));
+    }
+
+
+  }
 
 
   update(data) {
@@ -1925,7 +1938,6 @@ button {
             fireButton.classList.remove("active");
         }
     }
-
 
     // Update priority display
     const priorityDisplay = this.element.querySelector(".priority-display");
@@ -1993,11 +2005,17 @@ function handleWebSocketMessage(data) {
          console.log("Updated useGazState:", window.useGazState);
     }
 
-  if(parsedData.meta){
-        //footer .a_fire .manifoldTemp
-        el = document.querySelector("footer .a_fire .manifoldTemp");;
+  if(parsedData.meta && parsedData.meta.manifoldTemp !== undefined){
+        
+        el = document.querySelector("footer .a_fire .manifoldTemp");
         manifoldTemperature = parsedData.meta.manifoldTemp;
         el.innerHTML = manifoldTemperature + "°C";
+  }
+  if(parsedData.meta && parsedData.meta.minOperatingTemp !== undefined){
+        console.log("Min operating temperature:", parsedData.meta.minOperatingTemp);
+        document.querySelector("#configModal .minOperatingTemp").value = Number(parsedData.meta.minOperatingTemp);
+      
+  
   }
   if (parsedData.rooms) {
     const roomData = parsedData.rooms;
@@ -2159,6 +2177,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const useGazButton = document.getElementById("useGazButton");
   const tabButtons = document.querySelectorAll(".tab-button");
   const tabContents = document.querySelectorAll(".tab-content");
+  const saveMinimalTemp = document.querySelector("#configModal .minOperatingTemp");
+
 
   // Obsługa zakładek
   tabButtons.forEach(button => {
@@ -2176,6 +2196,13 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById(`${tabId}-tab`).style.display = "block";
     });
   });
+
+
+  // on change input trigger function
+  saveMinimalTemp.addEventListener("change", function() {
+    ws.send(JSON.stringify({ command: "minOperatingTemp", value: this.value }));
+});
+
 
   wsSendCommand = (command, value) => {
     ws.send(JSON.stringify({ command: command, value: value }));
