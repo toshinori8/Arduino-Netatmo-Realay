@@ -1426,7 +1426,7 @@ button {
             <div class="setting-item">
               <label>Minimalna temperatura włączenia:</label>
               
-              <input type="number" class="minOperatingTemp" >
+              <input type="number" class="manifoldMinTemp" >
               </br>
               <label>Tryb pracy:</label>
               <select id="workMode">
@@ -1925,9 +1925,9 @@ button {
       ws.send(JSON.stringify(message));
   }
   sendMinimalTemperature(){
-    temp= document.querySelector("#configModal .minOperatingTemp").value;
+    temp= document.querySelector("#configModal .manifoldMinTemp").value;
     if(temp != ""){
-       ws.send(JSON.stringify({ command: "minOperatingTemp", value: temp}));
+       ws.send(JSON.stringify({ command: "manifoldMinTemp", value: temp}));
     }
 
 
@@ -2044,9 +2044,9 @@ function handleWebSocketMessage(data) {
         manifoldTemperature = parsedData.meta.manifoldTemp;
         el.innerHTML = manifoldTemperature + "°C";
   }
-  if(parsedData.meta && parsedData.meta.minOperatingTemp !== undefined){
-        console.log("Min operating temperature:", parsedData.meta.minOperatingTemp);
-        document.querySelector("#configModal .minOperatingTemp").value = Number(parsedData.meta.minOperatingTemp);
+  if(parsedData.meta && parsedData.meta.manifoldMinTemp !== undefined){
+        console.log("Min operating temperature:", parsedData.meta.manifoldMinTemp);
+        document.querySelector("#configModal .manifoldMinTemp").value = Number(parsedData.meta.manifoldMinTemp);
       
   
   }
@@ -2210,7 +2210,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const useGazButton = document.getElementById("useGazButton");
   const tabButtons = document.querySelectorAll(".tab-button");
   const tabContents = document.querySelectorAll(".tab-content");
-  const saveMinimalTemp = document.querySelector("#configModal .minOperatingTemp");
+  const saveMinimalTemp = document.querySelector("#configModal .manifoldMinTemp");
 
 
   // Obsługa zakładek
@@ -2233,7 +2233,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // on change input trigger function
   saveMinimalTemp.addEventListener("change", function() {
-    ws.send(JSON.stringify({ command: "minOperatingTemp", value: this.value }));
+    ws.send(JSON.stringify({ command: "manifoldMinTemp", value: this.value }));
 });
 
 

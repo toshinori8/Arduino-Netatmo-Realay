@@ -46,11 +46,11 @@ void saveSettings(RoomManager &mgr, bool currentUseGaz)
   }
 
   // 3. Write Minimal Operating Temperature
-  EEPROM.put(ADDR_MIN_OPERATING_TEMP, minOperatingTemp);
-  Serial.printf("  Putting minOperatingTemp: %.2f at Addr: %d\n", minOperatingTemp, ADDR_MIN_OPERATING_TEMP);
+  EEPROM.put(ADDR_MIN_OPERATING_TEMP, manifoldMinTemp);
+  Serial.printf("  Putting manifoldMinTemp: %.2f at Addr: %d\n", manifoldMinTemp, ADDR_MIN_OPERATING_TEMP);
   if (!EEPROM.commit())
   {
-    Serial.println("ERROR! EEPROM commit failed after minOperatingTemp");
+    Serial.println("ERROR! EEPROM commit failed after manifoldMinTemp");
   }
 
   // 4. Write Room Count
@@ -130,8 +130,8 @@ bool loadSettings(RoomManager &mgr)
   Serial.printf("Loaded useGaz_ = %s\n", useGaz_ ? "true" : "false");
 
   // 3. Read Minimal Operating Temperature
-  EEPROM.get(ADDR_MIN_OPERATING_TEMP, minOperatingTemp);
-  Serial.printf("Loaded minOperatingTemp = %.1f\n", minOperatingTemp);
+  EEPROM.get(ADDR_MIN_OPERATING_TEMP, manifoldMinTemp);
+  Serial.printf("Loaded manifoldMinTemp = %.1f\n", manifoldMinTemp);
 
   // 4. Read Room Count
   byte roomCountToLoad = 0; // Initialize to prevent compiler warning

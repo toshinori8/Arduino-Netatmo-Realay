@@ -1,13 +1,14 @@
 #include <Arduino.h>
+#include <set>
 
 
-// w manifoldlogic chcialbym dodac kilka rzeczy. po pierwsze mozliwosc taką że gdy temp.temperature przekroczy np. 60 stopni to otwierany jest kolejny dodatkowy pokój. musi tez byc zapisywany parametr valve do managera pokojow (czy jest aktualnie otwarty)
+// w manifoldlogic chcialbym dodac kilka rzeczy. po pierwsze mozliwosc taką że gdy manifoldTemp przekroczy np. 60 stopni to otwierany jest kolejny dodatkowy pokój. musi tez byc zapisywany parametr valve do managera pokojow (czy jest aktualnie otwarty)
 
 
 // Gemini
 // Okay, rozumiem. Chcesz dodać dwie funkcjonalności do manifoldLogicNew:
 
-// Otwieranie dodatkowego zaworu przy wysokiej temperaturze kolektora: Gdy temp.temperature przekroczy określony próg (np. 60°C), system powinien otworzyć zawór dodatkowego pokoju (innego niż główny i wtórny), aby rozproszyć nadmiar ciepła.
+// Otwieranie dodatkowego zaworu przy wysokiej temperaturze kolektora: Gdy manifoldTemp przekroczy określony próg (np. 60°C), system powinien otworzyć zawór dodatkowego pokoju (innego niż główny i wtórny), aby rozproszyć nadmiar ciepła.
 // Zapisywanie stanu valve w RoomManager: Stan valve (czy zawór danego pokoju jest aktualnie otwarty przez logikę sterowania) powinien być poprawnie aktualizowany w obiekcie RoomData wewnątrz RoomManager.
 // Zmodyfikujemy manifoldLogicNew i dodamy małą funkcję pomocniczą do RoomManager.
 
@@ -18,14 +19,14 @@
 
 // W pliku roomManager.h, wewnątrz definicji klasy RoomManager
 // NOWE: Definicja progu wysokiej temperatury kolektora
-float HIGH_MANIFOLD_TEMP_THRESHOLD = 60.0; // Próg w stopniach Celsjusza
+
 
 void manifoldLogicNew()
 {
     Serial.println("--- Start Heating Logic ---");
 
     // przerwij funkcje jesli nie ma temepratury lub jest za niska
-    if (isnan(temp.temperature)) {
+    if (isnan(manifoldTemp)) {
          Serial.println("Manifold temperature sensor data is invalid (NaN). Aborting logic.");
          // Upewnij się, że wszystko jest wyłączone
          relayMode(HIGH); // Wyłącz wszystkie zawory pokojów
@@ -35,8 +36,8 @@ void manifoldLogicNew()
          return;
     }
 
-    if (temp.temperature < minOperatingTemp) {
-        Serial.printf("Manifold temperature (%.1f C) is below minimum operating temp (%.1f C). Aborting logic.\n", temp.temperature, minOperatingTemp);
+    if (manifoldTemp < manifoldMinTemp) {
+        Serial.printf("Manifold temperature (%.1f C) is below minimum operating temp (%.1f C). Aborting logic.\n", manifoldTemp, manifoldMinTemp);
         // Upewnij się, że wszystko jest wyłączone
         relayMode(HIGH); // Wyłącz wszystkie zawory pokojów
         ExpOutput.digitalWrite(P6, HIGH); // Wyłącz gaz
@@ -131,9 +132,9 @@ void manifoldLogicNew()
     }
 
     // --- NOWE: Trzeci przebieg (jeśli temp. kolektora wysoka): Znajdź dodatkowy pokój do otwarcia ---
-    if (temp.temperature > HIGH_MANIFOLD_TEMP_THRESHOLD) {
+    if (manifoldTemp > manifoldMaxTemp) {
         Serial.printf("Pass 3: High manifold temp (%.1f C > %.1f C). Identifying extra room...\n",
-                      temp.temperature, HIGH_MANIFOLD_TEMP_THRESHOLD);
+                      manifoldTemp, manifoldMaxTemp);
         for (const auto &room : rooms) {
             // Pomiń pokój główny i wtórny, jeśli zostały wybrane
             if (room.ID == primaryRoomId || room.ID == secondaryRoomId || !room.reachable) {
@@ -285,11 +286,11 @@ void manifoldLogicNew()
 }
 // Wyjaśnienie zmian:
 
-// HIGH_MANIFOLD_TEMP_THRESHOLD: Zdefiniowano stałą dla progu temperatury.
+// manifoldMaxTemp: Zdefiniowano stałą dla progu temperatury.
 // highTempRoomId / highestTempForHighTempRoom: Zmienne do śledzenia dodatkowego pokoju przy wysokiej temperaturze.
 // activeRoomIDs (std::set): Zbiór przechowujący ID wszystkich pokoi, których zawory powinny być aktualnie otwarte. Użycie set ułatwia sprawdzanie, czy dany ID już istnieje i zapobiega duplikatom.
-// Sprawdzanie temp.temperature na początku: Dodano bardziej solidne sprawdzanie isnan i minOperatingTemp na samym początku, aby uniknąć błędów w dalszej logice i zapewnić wyłączenie systemów.
-// Trzeci przebieg (Pass 3): Dodano logikę do wyszukiwania highTempRoomId, jeśli temp.temperature przekracza próg. Wybiera pokój (inny niż główny/wtórny) z najwyższą aktualną temperaturą.
+// Sprawdzanie manifoldTemp na początku: Dodano bardziej solidne sprawdzanie isnan i manifoldMinTemp na samym początku, aby uniknąć błędów w dalszej logice i zapewnić wyłączenie systemów.
+// Trzeci przebieg (Pass 3): Dodano logikę do wyszukiwania highTempRoomId, jeśli manifoldTemp przekracza próg. Wybiera pokój (inny niż główny/wtórny) z najwyższą aktualną temperaturą.
 // Sterowanie przekaźnikami:
 // Wszystkie przekaźniki są wyłączane na początku (relayMode(HIGH)).
 // Gdy przekaźnik dla pokoju głównego, wtórnego lub "nadmiarowego" jest włączany (ExpOutput.digitalWrite(pin, LOW)), jego ID jest dodawane do zbioru activeRoomIDs.
