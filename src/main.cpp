@@ -9,7 +9,7 @@
 #include <ESP8266WebServer.h>
 #include <WebSocketsServer.h>
 #include <IotWebConf.h>
-#include <manifoldLogic.h>
+
 #ifndef IOTWEBCONF_ENABLE_JSON
 #error platformio.ini must contain "build_flags = -DIOTWEBCONF_ENABLE_JSON"
 #endif
@@ -339,7 +339,7 @@ void relayMode(uint8_t state)
 
 // NOWE: Definicja progu wysokiej temperatury kolektora
 
-void manifoldLogicNew()
+// void manifoldLogicNew()
 {
 
   // --- Room Heating Logic ---
@@ -570,6 +570,9 @@ void readInitWifiConfig()
   iotWebConf.getRootParameterGroup()->loadFromJson(documentRoot);
   iotWebConf.saveConfig();
 }
+
+#include <manifoldLogic.h>
+
 
 void setup()
 {
