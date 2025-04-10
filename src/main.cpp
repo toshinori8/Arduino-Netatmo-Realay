@@ -9,8 +9,7 @@
 #include <ESP8266WebServer.h>
 #include <WebSocketsServer.h>
 #include <IotWebConf.h>
-#include <EEPROM.h> // Add EEPROM library
-
+#include <manifoldLogic.h>
 #ifndef IOTWEBCONF_ENABLE_JSON
 #error platformio.ini must contain "build_flags = -DIOTWEBCONF_ENABLE_JSON"
 #endif
@@ -22,8 +21,6 @@ StaticJsonDocument<200> docInput;
 #include <functional>
 #include <webPage.h>
 #include <roomManager.h>
-#include <now.h>
-
 
 const char thingName[] = "Netatmo_Relay";
 const char wifiInitialApPassword[] = "pmgana921";
@@ -56,8 +53,7 @@ float minOperatingTemp = 18.0;
 void readAHT()
 {
   aht.getEvent(&humidity, &temp);
- }
-
+}
 
 WebSocketsServer webSocket = WebSocketsServer(81);
 DNSServer dnsServer;
@@ -86,7 +82,6 @@ void prepareDataForWebServer()
   docPins["usegaz"] = useGaz_ ? "true" : "false"; // Initialize based on loaded/default useGaz_
 }
 
-
 void handleRoot()
 {
   if (iotWebConf.handleCaptivePortal())
@@ -107,8 +102,6 @@ Timers<4> timers;
 // obiekty ekspanderów PCF8574
 PCF8574 ExpInput(0x20);  // utworzenie obiektu dla pierwszego ekspandera
 PCF8574 ExpOutput(0x26); // utworzenie obiektu dla drugiego ekspandera
-
-
 
 void otaStart();
 void initInputExpander()
@@ -194,13 +187,12 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
     Serial.println(messageText);
     //{"command":"usegaz","value":"true"}
-    if(docInput["command"]=="minOperatingTemp"){
+    if (docInput["command"] == "minOperatingTemp")
+    {
 
-      // value to float 
-      
-      minOperatingTemp=docInput["value"].as<float>();
-      
+      // value to float
 
+      minOperatingTemp = docInput["value"].as<float>();
     }
     if (docInput["command"] == "usegaz")
     {
@@ -329,7 +321,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 void broadcastWebsocket()
 {
   docPins["minOperatingTemp"] = String(minOperatingTemp);
-  docPins["manifoldTemp"]     = String(temp.temperature);
+  docPins["manifoldTemp"] = String(temp.temperature);
 
   String data = manager.getRoomsAsJson();
   webSocket.broadcastTXT(data);
@@ -343,6 +335,9 @@ void relayMode(uint8_t state)
     ExpOutput.digitalWrite(i, state); // LOW = ON, HIGH = OFF
   }
 }
+
+
+// NOWE: Definicja progu wysokiej temperatury kolektora
 
 void manifoldLogicNew()
 {
@@ -431,121 +426,121 @@ void manifoldLogicNew()
   }
 
   // przerwij funkcje jesli nie ma temepratury  lub jest za niska
-  if (isnan(temp.temperature) || temp.temperature < minOperatingTemp) {
+  if (isnan(temp.temperature) || temp.temperature < minOperatingTemp)
+  {
     Serial.println("no temperature sensor data from manifold or temperature too low");
     return;
-  } else {
-
-  // Activate primary room relay
-  if (primaryRoomId != -1)
-  {
-    for (const auto &room : rooms)
-    {
-      if (room.ID == primaryRoomId)
-      {
-        if (room.pinNumber >= 0 && room.pinNumber < 6)
-        {
-          relayMode(LOW);
-          ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON
-
-          Serial.printf("Primary heating ON: Room %s (Pin %d, Temp %.1f, Lowest Temp)\n",
-                        room.name.c_str(), room.pinNumber, room.currentTemperature);
-        }
-        break;
-      }
-    }
   }
   else
   {
-    Serial.println("No primary forced room needs heating.");
-  }
 
-  // Activate secondary room relay
-  if (secondaryRoomId != -1)
-  {
-    for (const auto &room : rooms)
+    // Activate primary room relay
+    if (primaryRoomId != -1)
     {
-      if (room.ID == secondaryRoomId)
+      for (const auto &room : rooms)
       {
-        if (room.pinNumber >= 0 && room.pinNumber < 6)
+        if (room.ID == primaryRoomId)
         {
-          // Check if it's the same pin as primary - avoid double logging if so
-          if (primaryRoomId == -1 || room.pinNumber != manager.getRoomByID(primaryRoomId).pinNumber)
+          if (room.pinNumber >= 0 && room.pinNumber < 6)
           {
-            //  relayMode(LOW);
-            ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = OFF
-                                                          //  docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
-            Serial.printf("Secondary heating ON: Room %s (Pin %d, Temp %.1f, Smallest Diff %.1f)\n",
-                          room.name.c_str(), room.pinNumber, room.currentTemperature, smallestPositiveDifference);
+            relayMode(LOW);
+            ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = ON
 
-                        // Create a mutable copy of the room data
-                        RoomData updatedRoom = room;
-                        // Update valve status
-                        updatedRoom.valve = true;
-
-                        // Update or add the room with the modified copy
-                        manager.updateOrAddRoom(updatedRoom);
-
-
-
+            Serial.printf("Primary heating ON: Room %s (Pin %d, Temp %.1f, Lowest Temp)\n",
+                          room.name.c_str(), room.pinNumber, room.currentTemperature);
           }
-          else
-          {
-            Serial.printf("Secondary room (%s) shares pin with primary. Already ON.\n", room.name.c_str());
-          }
+          break;
         }
-        break;
       }
     }
-  }
-  else if (primaryRoomId != -1)
-  {
-    Serial.println("No suitable secondary forced room found.");
-    relayMode(HIGH);
-  }
-
-  // --- Gas/Pump Control ---
-
-  // if there is forced room, is primary room
-  if (primaryRoomId != -1 && useGaz_ == true)
-  {
-
-    ExpOutput.digitalWrite(P6, LOW);
-    ExpOutput.digitalWrite(P7, LOW);
-
-    Serial.println("Gas mode ON - P6/P7 ON");
-  }
-  // ONLY KOMINEK
-  else if (primaryRoomId != -1 && useGaz_ == false)
-  {
-    ExpOutput.digitalWrite(P6, HIGH);
-    ExpOutput.digitalWrite(P7, LOW);
-
-    Serial.println("Gas mode OFF - P6 OFF / P7 ON ");
-  }
-  // else if no primary room, turn off gas/pump
-  else if (primaryRoomId == -1 && useGaz_ == false)
-  {
-    ExpOutput.digitalWrite(P6, HIGH);
-    ExpOutput.digitalWrite(P7, HIGH);
-
-    Serial.println("Gas mode OFF NO HEATING - P6/P7 OFF");
-  }
-
-  // --- Update docPins forced status and final room info ---
-  for (const auto &room : rooms)
-  {
-    if (room.pinNumber >= 0 && room.pinNumber < 6)
+    else
     {
-      docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = room.forced ? "true" : "false";
+      Serial.println("No primary forced room needs heating.");
     }
+
+    // Activate secondary room relay
+    if (secondaryRoomId != -1)
+    {
+      for (const auto &room : rooms)
+      {
+        if (room.ID == secondaryRoomId)
+        {
+          if (room.pinNumber >= 0 && room.pinNumber < 6)
+          {
+            // Check if it's the same pin as primary - avoid double logging if so
+            if (primaryRoomId == -1 || room.pinNumber != manager.getRoomByID(primaryRoomId).pinNumber)
+            {
+              //  relayMode(LOW);
+              ExpOutput.digitalWrite(room.pinNumber, HIGH); // HIGH = OFF
+                                                            //  docPins["pins"]["pin_" + String(room.pinNumber)]["state"] = "ON";
+              Serial.printf("Secondary heating ON: Room %s (Pin %d, Temp %.1f, Smallest Diff %.1f)\n",
+                            room.name.c_str(), room.pinNumber, room.currentTemperature, smallestPositiveDifference);
+
+              // Create a mutable copy of the room data
+              RoomData updatedRoom = room;
+              // Update valve status
+              updatedRoom.valve = true;
+
+              // Update or add the room with the modified copy
+              manager.updateOrAddRoom(updatedRoom);
+            }
+            else
+            {
+              Serial.printf("Secondary room (%s) shares pin with primary. Already ON.\n", room.name.c_str());
+            }
+          }
+          break;
+        }
+      }
+    }
+    else if (primaryRoomId != -1)
+    {
+      Serial.println("No suitable secondary forced room found.");
+      relayMode(HIGH);
+    }
+
+    // --- Gas/Pump Control ---
+
+    // if there is forced room, is primary room
+    if (primaryRoomId != -1 && useGaz_ == true)
+    {
+
+      ExpOutput.digitalWrite(P6, LOW);
+      ExpOutput.digitalWrite(P7, LOW);
+
+      Serial.println("Gas mode ON - P6/P7 ON");
+    }
+    // ONLY KOMINEK
+    else if (primaryRoomId != -1 && useGaz_ == false)
+    {
+      ExpOutput.digitalWrite(P6, HIGH);
+      ExpOutput.digitalWrite(P7, LOW);
+
+      Serial.println("Gas mode OFF - P6 OFF / P7 ON ");
+    }
+    // else if no primary room, turn off gas/pump
+    else if (primaryRoomId == -1 && useGaz_ == false)
+    {
+      ExpOutput.digitalWrite(P6, HIGH);
+      ExpOutput.digitalWrite(P7, HIGH);
+
+      Serial.println("Gas mode OFF NO HEATING - P6/P7 OFF");
+    }
+
+    // --- Update docPins forced status and final room info ---
+    for (const auto &room : rooms)
+    {
+      if (room.pinNumber >= 0 && room.pinNumber < 6)
+      {
+        docPins["pins"]["pin_" + String(room.pinNumber)]["forced"] = room.forced ? "true" : "false";
+      }
+    }
+    docPins["roomsInfo"] = manager.getRoomsAsJson(); // Send updated state including valve status
+
+    Serial.println("--- End Heating Logic ---");
   }
-  docPins["roomsInfo"] = manager.getRoomsAsJson(); // Send updated state including valve status
-  
-  Serial.println("--- End Heating Logic ---");
-  
-  }
-  if(temp.temperature<=minOperatingTemp){
+  if (temp.temperature <= minOperatingTemp)
+  {
     Serial.println("--- End Heating Logic --- Manifold too cold");
     relayMode(HIGH);
   }
@@ -587,12 +582,12 @@ void setup()
   } // Wait for serial connection
   Serial.println("\nStarting up...");
 
-
-if (!aht.begin()) {
+  if (!aht.begin())
+  {
     Serial.println("Nie wykryto AHT10!");
-    while (1) delay(10);
+    while (1)
+      delay(10);
   }
-
 
   // -- Initialize EEPROM --
   EEPROM.begin(EEPROM_SIZE); // Use the requested size (512)
@@ -672,13 +667,8 @@ if (!aht.begin()) {
   otaStart();
   initInputExpander();
   blinkOutput(20);
-  // Inicjalizacja ESP-NOW
-  if (esp_now_init() != ERR_OK)
-  {
-    Serial.println("Błąd inicjalizacji ESP-NOW");
-    return;
-  }
-  esp_now_register_recv_cb(onDataRecv);
+
+
 
 #if defined(ESP8266) || defined(ESP32)
   int eepromSize = 512; // Change based on board

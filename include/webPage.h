@@ -48,15 +48,20 @@
   }
 }
 
-
 body {
- overflow: visible;
- background-image: linear-gradient(rgba(5, 5, 5, 0.2), rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.2));
- transition: all ease 0.5s;
- min-height: 100vh;
- transition: background-color 0.5s ease;
+  overflow: visible;
+  background-image: linear-gradient(
+    rgba(5, 5, 5, 0.2),
+    rgba(5, 5, 5, 0.2) 0%,
+    rgba(5, 5, 5, 0.2) 0%,
+    rgba(5, 5, 5, 0.2) 0%,
+    rgba(5, 5, 5, 0.2) 0%,
+    rgba(5, 5, 5, 0.2)
+  );
+  transition: all ease 0.5s;
+  min-height: 100vh;
+  transition: background-color 0.5s ease;
 }
-
 
 /* no select class */
 
@@ -70,18 +75,19 @@ body {
 }
 
 /* no select for br, button, li, ul, body */
-  body, button, ul, li, br, a {
+body,
+button,
+ul,
+li,
+br,
+a {
   -webkit-touch-callout: none; /* iOS Safari */
   -webkit-user-select: none; /* Safari */
   -khtml-user-select: none; /* Konqueror HTML */
   -moz-user-select: none; /* Old versions of Firefox */
   -ms-user-select: none; /* Internet Explorer/Edge */
   user-select: none; /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
-  }
-
-
-
-
+}
 
 @keyframes fadeIn {
   from {
@@ -91,8 +97,7 @@ body {
     opacity: 1;
   }
 }
-.quick-actions .eco-button{
-
+.quick-actions .eco-button {
   display: none;
 }
 
@@ -108,16 +113,14 @@ body {
   overflow: hidden;
 }
 
-
-
-.priority-display{
+.priority-display {
   opacity: 0.2;
   font-size: 10px !important;
   margin-top: -430px !important;
 }
 body.heating::before {
   content: "";
-  background: rgba(255, 174, 0, 1.000);
+  background: rgba(255, 174, 0, 1);
   position: absolute;
   top: 0px;
   right: 0px;
@@ -125,16 +128,44 @@ body.heating::before {
   left: 0px;
   opacity: 1;
   transition: all ease 1s;
-  background-image: -webkit-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
-  background-image: -moz-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
-  background-image: -o-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
-  background-image: linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
+  background-image: -webkit-linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
+  background-image: -moz-linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
+  background-image: -o-linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
+  background-image: linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
   background-position: 106px;
 }
 
 body::before {
   content: "";
-  background: rgba(255, 174, 0, 1.000);
+  background: rgba(255, 174, 0, 1);
   position: absolute;
   opacity: 0;
   top: 0px;
@@ -142,14 +173,40 @@ body::before {
   bottom: 0px;
   left: 0px;
   transition: all ease 1s;
-  background-image: -webkit-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
-  background-image: -moz-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
-  background-image: -o-linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
-  background-image: linear-gradient(#fd8000, #fe8a00 20%, #fe9300 40%, #ff9c00 60%, orange 80%, #ffae00);
+  background-image: -webkit-linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
+  background-image: -moz-linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
+  background-image: -o-linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
+  background-image: linear-gradient(
+    #fd8000,
+    #fe8a00 20%,
+    #fe9300 40%,
+    #ff9c00 60%,
+    orange 80%,
+    #ffae00
+  );
   background-position: 100px;
 }
-
-
 
 .container {
   max-width: 480px;
@@ -195,45 +252,41 @@ animation: expandToFullScreen 0.5s forwards;
 
 } */
 @keyframes shrinkToNormal {
-0% {
-transform: scale(1);
-}
-100% {
-transform: scale(0.4);
-}
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0.4);
+  }
 }
 @keyframes expandToFullScreen {
-0% {
-transform: scale(0.4);
-opacity: 0;
-}
-50% {
-opacity: 1;
-}
-100% {
-transform: scale(1);
-opacity: 1;
-}
-
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .thermostat-card .a_fire .manifoldTemp {
-  
   display: none;
 }
 
 footer .a_fire .manifoldTemp {
-
   position: absolute;
   color: #ffe1e1;
   font-size: 10px;
   margin-top: 34px;
   margin-left: 8px;
-  background-color: rgba(200,200,200,0.3);
+  background-color: rgba(200, 200, 200, 0.3);
   border-radius: 30px;
   padding: 3px;
 }
-
 
 .thermostat-card {
   border-top: 3px solid #66666687;
@@ -241,8 +294,8 @@ footer .a_fire .manifoldTemp {
   padding: 29px;
   border-radius: 20px;
   /* border-bottom: 0.6px darkred solid; */
-  
-  box-shadow: 16px 26px 70px 30px rgba(0,0,0,0.1);
+
+  box-shadow: 16px 26px 70px 30px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -253,27 +306,25 @@ footer .a_fire .manifoldTemp {
   /* animation: shrinkToNormal 0.5s backwards; */
 }
 
-.thermostat-list .battery_indicator{
-
-
+.thermostat-list .battery_indicator {
 }
-.thermostat-card .battery_indicator{
-opacity: 0;
-position: relative;
-top: -200px;
-transform: scale(0.5) scaleY(0.7);
-left: 365px;
-width: 46px;
-transition: all 0.0s ease !important;
+.thermostat-card .battery_indicator {
+  opacity: 0;
+  position: relative;
+  top: -200px;
+  transform: scale(0.5) scaleY(0.7);
+  left: 365px;
+  width: 46px;
+  transition: all 0s ease !important;
 }
-.thermostat-card.expanded .battery_indicator{
-opacity: 1;
-position: relative;
-top: -329px;
-transform: scale(0.5) scaleY(0.7);
-left: 365px;
-width: 46px;
-transition: all ease 0.3s !important;
+.thermostat-card.expanded .battery_indicator {
+  opacity: 1;
+  position: relative;
+  top: -329px;
+  transform: scale(0.5) scaleY(0.7);
+  left: 365px;
+  width: 46px;
+  transition: all ease 0.3s !important;
 }
 .thermostat-card h2 {
   font-size: 20px;
@@ -294,7 +345,7 @@ transition: all ease 0.3s !important;
   color: white;
   text-align: left;
   border-radius: 30px;
-  box-shadow: inset 0px 0px 13px 4px rgba(0,0,0,0.1);
+  box-shadow: inset 0px 0px 13px 4px rgba(0, 0, 0, 0.1);
   font-weight: 900;
   padding-left: 43px;
 }
@@ -329,8 +380,6 @@ transition: all ease 0.3s !important;
   gap: 20px;
   margin: 40px 0;
 }
-
-
 
 .expanded .temperature-label {
   /* font-size: 14px; */
@@ -393,32 +442,24 @@ transition: all ease 0.3s !important;
   border-color: #ccc;
 }
 
-.action-button.a_fire svg path{
-
-fill: #b9b9b9;
-stroke: #111111;
-stroke-width: 4px;
-
-
+.action-button.a_fire svg path {
+  fill: #b9b9b9;
+  stroke: #111111;
+  stroke-width: 4px;
 }
-.action-button.a_fire svg{
-width: 20px;
-
+.action-button.a_fire svg {
+  width: 20px;
 }
-.action-button.active{
-
-background-color: #3c97bf;
+.action-button.active {
+  background-color: #3c97bf;
 }
-.action-button.active.a_fire svg path{
-
-fill: #f6f5f5;
-stroke: #f8f8f8;
-stroke-width: 4px;
-
-
+.action-button.active.a_fire svg path {
+  fill: #f6f5f5;
+  stroke: #f8f8f8;
+  stroke-width: 4px;
 }
 
-footer button{
+footer button {
   color: white;
 }
 
@@ -432,21 +473,17 @@ footer .iconHeat {
   transition: opacity 0.3s ease;
 }
 
-  footer p.heatState {
- 
-  
+footer p.heatState {
   opacity: 0.3;
   transition: opacity 0.3s ease;
 }
 
 footer .heatState.active {
- 
-
   opacity: 0.7;
   transition: opacity 0.3s ease;
 }
 
-footer button{
+footer button {
   /* color: white !important; */
 }
 
@@ -463,7 +500,6 @@ footer ion-icon:hover {
   transform: rotate(20deg);
 }
 
-
 footer {
   display: flex;
   background-color: #222;
@@ -477,21 +513,32 @@ footer {
   z-index: 2000;
 }
 
-footer {height: 50px;
+footer {
+  height: 50px;
+  height: 3;
+}
 
-  #ws-statussvg .st1_wsConnect {fill: #ccc;opacity: 0.6;
-  }
-  #ws-status.connectedsvg .st1_wsConnect {fill: #FB8725;opacity: 1;
-  }
-  #ws-statussvg .st0_wsConnect {fill: #FB8725;opacity: 0.5;
-  }
-  
-  #ws-status.ws-connectedsvg .st1_wsConnect {fill: #FB8725;opacity: 0.8;
-  }
+footer #ws-status {
+  display: none !important;
+}
 
-;height: 3;}
+footer #ws-status svg .st1_wsConnect {
+  fill: #ccc;
+  opacity: 0.6;
+}
+footer #ws-status.connected svg .st1_wsConnect {
+  fill: #fb8725;
+  opacity: 1;
+}
+footer #ws-status svg .st0_wsConnect {
+  fill: #fb8725;
+  opacity: 0.5;
+}
 
-
+footer #ws-status.ws-connected svg .st1_wsConnect {
+  fill: #fb8725;
+  opacity: 0.8;
+}
 
 footer i {
   color: red;
@@ -510,25 +557,24 @@ footer button {
 }
 
 footer button:hover {
-
-  background-color: rgba(185, 66, 67, 1.000);
-
+  background-color: rgba(185, 66, 67, 1);
 }
-footer .right{display: flex;position: fixed;right: -30px;flex-direction: row;justify-content: flex-start;
+footer .right {
+  display: flex;
+  position: fixed;
+  right: -30px;
+  flex-direction: row;
+  justify-content: flex-start;
 
-  p{
-
-      margin-left: 12px;
+  p {
+    margin-left: 12px;
   }
-
 }
-
 
 footer button:active {
-  background-color: rgba(185, 66, 67, 1.000);
-
+  background-color: rgba(185, 66, 67, 1);
 }
-footer p{
+footer p {
   width: 30px;
   height: 30px;
   float: right !important;
@@ -536,43 +582,36 @@ footer p{
   svg {
     width: 30px;
     height: 30px;
-  }   
+  }
 }
 
-footer button svg, footer p svg {
-
+footer button svg,
+footer p svg {
   transition: all ease 0.5s !important;
 }
 
 footer .a_fire svg {
-
   transform: scale(0.8);
-
 }
 
-footer button:hover svg, footer p:hover svg{
-
+footer button:hover svg,
+footer p:hover svg {
   transform: rotate(10deg);
-
 }
 
-footer .a_weather img{
-
-width: 39px;
-margin-top: 4px;
-
+footer .a_weather img {
+  width: 39px;
+  margin-top: 4px;
 }
 
-footer .a_qrcode svg{
-transform: scale(0.8);
-
+footer .a_qrcode svg {
+  transform: scale(0.8);
 }
-footer .a_qrcode svg rect{
-fill: #fff;
-stroke-linejoin: round;
-  
+footer .a_qrcode svg rect {
+  fill: #fff;
+  stroke-linejoin: round;
 }
-footer .a_qrcode svg rect.ionicon-fill-none{
+footer .a_qrcode svg rect.ionicon-fill-none {
   stroke-width: 1;
   fill: none;
   stroke: #fff;
@@ -583,47 +622,38 @@ footer button svg {
   height: 35px;
   /* margin: -5px -12px; */
 }
-footer .usegaz svg{
+footer .usegaz svg {
   width: 35px;
   height: 35px;
   margin: 7px 2px;
 }
-footer .usegaz svg rect{
+footer .usegaz svg rect {
   stroke: #fff;
   fill: none;
   outline: #f5f5f5;
   stroke-linejoin: round;
-  stroke-width:  22px;
-
+  stroke-width: 22px;
 }
 
+footer a svg path {
+  fill: rgba(250, 250, 250, 0.8);
+}
 
-footer a svg path { fill: rgba(250, 250, 250, 0.8);}
-
-footer a.usegaz {}
+footer a.usegaz {
+}
 
 footer a.usegaz.active {
-
-  background-color: rgba(185, 66, 67, 1.000);
-
+  background-color: rgba(185, 66, 67, 1);
 }
 
 footer a.usegaz svg {
   width: 24px;
-
 }
-
-
 
 footer a:hover:after {
-
   position: absolute;
   background-color: red;
-
 }
-
-
-
 
 /* Loader styles */
 .loader {
@@ -653,7 +683,6 @@ footer a:hover:after {
   /* animation: dash 1.5s ease-in-out infinite; */
 }
 
-
 loader.loader {
   width: 65px;
   height: 30px;
@@ -681,9 +710,6 @@ loader.loader {
   }
 }
 
-
-
-
 .status-bar {
   position: fixed;
   bottom: 0;
@@ -692,8 +718,7 @@ loader.loader {
   height: 80px;
   background: rgba(20, 20, 20, 0.649);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-  display: flex
-;
+  display: flex;
   justify-content: flex-start;
   align-items: center;
   padding: 0 20px;
@@ -714,16 +739,14 @@ loader.loader {
 }
 
 .status-item svg {
-
   outline: #ccc;
 }
 
-.status-item span {   
-   transition: all 0.2s ease;
+.status-item span {
+  transition: all 0.2s ease;
 }
-  .status-item:hover span {
+.status-item:hover span {
   color: white;
-
 }
 
 .status-item.active {
@@ -737,8 +760,8 @@ loader.loader {
 
 /*  */
 /* .expanded .heating-indicator { */
-  /* top: 184px; */
-  /* right: 24px; */
+/* top: 184px; */
+/* right: 24px; */
 /* } */
 .heating-indicator {
   width: 8px;
@@ -752,9 +775,18 @@ loader.loader {
 }
 
 @keyframes pulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.5); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .back-button {
@@ -819,15 +851,15 @@ loader.loader {
 
 @keyframes expandToFullScreen {
   0% {
-  transform: scale(0.4);
-  opacity: 0;
+    transform: scale(0.4);
+    opacity: 0;
   }
   50% {
-  opacity: 1;
+    opacity: 1;
   }
   100% {
-  transform: scale(1);
-  opacity: 1;
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
@@ -878,7 +910,7 @@ loader.loader {
   top: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0,0,0,0.4);
+  background-color: rgba(0, 0, 0, 0.4);
 }
 
 .modal-content {
@@ -915,7 +947,8 @@ loader.loader {
 #roomList select {
   margin-left: 10px;
   padding: 5px;
-}</style>
+}
+</style>
     <style type="text/css">/* Modal */
 .modal {
   display: none;

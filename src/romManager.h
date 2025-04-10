@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 // --- EEPROM Save/Load Functions ---
 
 // --- EEPROM Settings ---
@@ -8,7 +9,7 @@
 const int ADDR_MAGIC = 0;
 const int ADDR_USE_GAZ = ADDR_MAGIC + sizeof(byte);
 const int ADDR_MIN_OPERATING_TEMP = ADDR_USE_GAZ + sizeof(bool);
-const int ADDR_ROOM_COUNT = ADDR_MIN_OPERATING_TEMP + sizeof(bool);
+const int ADDR_ROOM_COUNT = ADDR_MIN_OPERATING_TEMP + sizeof(float);
 const int ADDR_ROOM_DATA_START = ADDR_ROOM_COUNT + sizeof(byte);
 
 // Calculate size needed for one room's data
@@ -44,9 +45,10 @@ void saveSettings(RoomManager &mgr, bool currentUseGaz)
     Serial.println("ERROR! EEPROM commit failed after useGaz");
   }
 
-  // 3. Write Minimal Operating Temperature  minOperatingTemp
+  // 3. Write Minimal Operating Temperature
   EEPROM.put(ADDR_MIN_OPERATING_TEMP, minOperatingTemp);
-     if (!EEPROM.commit())
+  Serial.printf("  Putting minOperatingTemp: %.2f at Addr: %d\n", minOperatingTemp, ADDR_MIN_OPERATING_TEMP);
+  if (!EEPROM.commit())
   {
     Serial.println("ERROR! EEPROM commit failed after minOperatingTemp");
   }

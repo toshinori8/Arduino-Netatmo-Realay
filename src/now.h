@@ -1,7 +1,12 @@
 #include <Arduino.h>
 // #include <ArduinoJson.h>
-
-
+  // Inicjalizacja ESP-NOW
+  if (esp_now_init() != ERR_OK)
+  {
+    Serial.println("Błąd inicjalizacji ESP-NOW");
+    return;
+  }
+  esp_now_register_recv_cb(onDataRecv);
 
 
 void onDataRecv(uint8_t *mac, uint8_t *data, uint8_t len) {
