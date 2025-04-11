@@ -225,7 +225,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         useGaz_ = false;
         docPins["usegaz"] = "false";
       }
-      saveSettings(manager, useGaz_); // Save after change
+      saveSettings(manager, useGaz_, manifoldTemp); // Save after change
     }
 
     if (docInput["command"] == "act_temperature")
@@ -243,7 +243,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       int id = docInput["id"];
       float targetTemperatureFireplace = docInput["targetTemperatureFireplace"]; // Value from Slider 2
       manager.setFireplaceTemperature(id, targetTemperatureFireplace);           // Update local fireplace target only
-      saveSettings(manager, useGaz_);                                            // Save after change
+      saveSettings(manager, useGaz_, manifoldTemp);                                            // Save after change
     }
 
     // }
@@ -270,7 +270,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         updatedRoom.forced = forced;          // Update only the forced status
         manager.updateOrAddRoom(updatedRoom); // Use updateOrAddRoom to save the change
         Serial.printf("Forced status for room %d set to %s\n", id, forced ? "true" : "false");
-        saveSettings(manager, useGaz_); // Save after change
+        saveSettings(manager, useGaz_, manifoldTemp); // Save after change
       }
       else
       {
@@ -317,7 +317,7 @@ void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       int roomId = docInput["roomId"];
       int newPin = docInput["pin"];
       manager.updatePinMapping(roomId, newPin);
-      saveSettings(manager, useGaz_); // Save after change
+      saveSettings(manager, useGaz_, manifoldTemp); // Save after change
 
       // Potwierdź aktualizację
       String response = "{\"response\":\"pinUpdated\",\"roomId\":" + String(roomId) +
@@ -401,14 +401,14 @@ void setup()
   Serial.printf("EEPROM size requested: %d bytes\n", EEPROM_SIZE);
 
   // -- Load settings or initialize EEPROM --
-  if (!loadSettings(manager))
+  if (!loadSettings(manager,useGaz_, manifoldTemp))
   {
     // EEPROM not initialized or data corrupted, save defaults
     Serial.println("Initializing EEPROM with default settings...");
     useGaz_ = false; // Default value
     // Manager defaults (like initial pin map) are set in its constructor.
     // We save the current state which includes these defaults.
-    saveSettings(manager, useGaz_);
+    saveSettings(manager, useGaz_, manifoldTemp);
   }
   // Update docPins based on potentially loaded useGaz_ value AFTER loading attempt
   docPins["usegaz"] = useGaz_ ? "true" : "false";
@@ -493,7 +493,7 @@ void setup()
   timers.attach(0, 65000, fetchNetatmo);
   timers.attach(1, 12000, broadcastWebsocket);
   timers.attach(2, 20000, manifoldLogicNew);
-  timers.attach(4, 50000, readAHT);
+  timers.attach(4, 150000, readAHT);
 }
 
 void loop()
