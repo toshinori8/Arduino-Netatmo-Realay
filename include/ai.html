@@ -1,0 +1,530 @@
+
+Zbigniew Adam Karski
+potrzeb uje by drugi pokoj byl dogrzewany jesli tylko roznica pomiedzy temepratuta zadana pierwszeo a temeratura aktualna jest wieksza od 2,5 ten parametr potem tez bede musial miec mozliwosc zapisywania i ustawiania.
+
+
+Gemini
+Okay, rozumiem. Chcesz dodać funkcjonalność "wspomagania" ogrzewania drugiego pokoju (nazwijmy go "pokojem wspomaganym"), gdy główny pokój (nazwijmy go "pokojem referencyjnym") wymaga intensywnego dogrzewania (różnica między temperaturą zadaną a aktualną przekracza pewien próg). Ten próg ma być konfigurowalny i zapisywany w EEPROM.
+
+Oto kroki i modyfikacje kodu potrzebne do implementacji tej funkcji:
+
+Założenia:
+
+Identyfikacja pokoi: Zakładam, że "pierwszy pokój" (referencyjny) to ten przypisany do pinNumber = 0, a "drugi pokój" (wspomagany) to ten przypisany do pinNumber = 1. Jeśli masz inne przypisanie, musisz dostosować numery pinów w kodzie.
+Logika sterowania: Główna logika sterowania zaworami znajduje się w funkcji manifoldLogicNew (która jest prawdopodobnie w pliku manifoldLogicOld.h - nazwa może być myląca, lub została przeniesiona do main.cpp). Tam wprowadzimy modyfikacje.
+Temperatura zadana: Użyjemy targetTemperatureNetatmo jako temperatury zadanej dla pokoju referencyjnego do obliczenia różnicy.
+Kroki implementacji:
+
+Dodanie nowego parametru (progu wspomagania):
+Zadeklaruj globalną zmienną w main.cpp.
+Dodaj obsługę zapisu/odczytu w romManager.h.
+Dodaj obsługę ustawiania przez WebSocket w main.cpp.
+(Opcjonalnie) Dodaj pole w interfejsie webowym (webPage.h) do ustawiania tego progu.
+Modyfikacja logiki sterowania (manifoldLogicNew):
+Znajdź dane dla pokoju referencyjnego (pin 0) i wspomaganego (pin 1).
+Oblicz różnicę temperatur dla pokoju referencyjnego.
+Jeśli różnica przekracza próg, wymuś otwarcie zaworu dla pokoju wspomaganego (pin 1), niezależnie od jego własnych potrzeb grzewczych.
+Modyfikacje kodu:
+
+1. Plik main.cpp
+
+cpp
+// ... inne includy i definicje ...
+
+#include <functional>
+#include <webPage.h>
+#include <roomManager.h>
+
+// ... definicje thingName, wifiInitialApPassword, etc. ...
+
+// NOWY PARAMETR: Próg różnicy temperatur do włączenia wspomagania
+float boostThreshold = 2.5; // Domyślna wartość
+
+// ... reszta zmiennych globalnych (forced, woodStove, state, pin, useGaz_, etc.) ...
+
+// Zaktualizuj wywołanie loadSettings i saveSettings w setup() i onWsEvent, aby uwzględnić nowy parametr
+
+// ... w funkcji setup() ...
+void setup()
+{
+    // ... (początek setup) ...
+
+    // -- Load settings or initialize EEPROM --
+    // Zaktualizuj wywołanie loadSettings, dodając boostThreshold
+    if (!loadSettings(manager, useGaz_, manifoldMinTemp, boostThreshold)) // <-- Dodaj boostThreshold
+    {
+        // EEPROM not initialized or data corrupted, save defaults
+        Serial.println("Initializing EEPROM with default settings...");
+        useGaz_ = false; // Default value
+        manifoldMinTemp = 18.0; // Default value
+        boostThreshold = 2.5; // Default value <-- Ustaw domyślny próg
+        // Manager defaults are set in its constructor.
+        saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // <-- Dodaj boostThreshold
+    }
+     else {
+         Serial.printf("Loaded settings: useGaz=%s, manifoldMinTemp=%.1f, boostThreshold=%.1f\n",
+                       useGaz_ ? "true" : "false", manifoldMinTemp, boostThreshold);
+     }
+    // Update docPins based on potentially loaded useGaz_ value AFTER loading attempt
+    docPins["usegaz"] = useGaz_ ? "true" : "false";
+    docPins["boostThreshold"] = boostThreshold; // <-- Dodaj próg do danych wysyłanych do UI
+
+    // ... (reszta setup) ...
+
+     // Aktualizacja timera dla broadcastWebsocket, aby wysyłał też próg
+     // timers.attach(1, 12000, broadcastWebsocket); // Już istnieje, upewnij się, że broadcastWebsocket wysyła próg
+     timers.attach(3, 5000, readAHT); // Zmieniono interwał na 5 sekund dla testów AHT
+}
+
+
+// ... w funkcji onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) ...
+void onWsEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
+{
+    switch (type)
+    {
+        // ... (case WStype_DISCONNECTED, WStype_CONNECTED) ...
+        case WStype_TEXT:
+        {
+            // ... (parsowanie JSON) ...
+
+            // Obsługa ustawiania minimalnej temperatury kolektora
+            if (docInput["command"] == "manifoldMinTemp")
+            {
+                manifoldMinTemp = docInput["value"].as<float>();
+                saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // <-- Dodaj boostThreshold
+                 docPins["manifoldMinTemp"] = String(manifoldMinTemp); // Update UI value
+            }
+
+            // NOWA OBSŁUGA: Ustawianie progu wspomagania
+            if (docInput["command"] == "setBoostThreshold")
+            {
+                boostThreshold = docInput["value"].as<float>();
+                Serial.printf("Boost threshold set to: %.1f\n", boostThreshold);
+                saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // <-- Zapisz nowy próg
+                docPins["boostThreshold"] = boostThreshold; // <-- Zaktualizuj wartość dla UI
+            }
+
+
+            if (docInput["command"] == "usegaz")
+            {
+                // ... (istniejąca logika usegaz) ...
+                // Zaktualizuj zapis, aby uwzględniał boostThreshold
+                saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // <-- Dodaj boostThreshold
+            }
+
+             if (docInput["command"] == "set_fireplace_target")
+             {
+                 // ... (istniejąca logika) ...
+                 saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // <-- Dodaj boostThreshold
+             }
+
+             if (docInput["command"] == "forced")
+             {
+                 // ... (istniejąca logika) ...
+                  saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // <-- Dodaj boostThreshold
+             }
+
+            if (docInput["command"] == "updatePin")
+            {
+                // ... (istniejąca logika) ...
+                saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // <-- Dodaj boostThreshold
+            }
+
+
+            // ... (reszta obsługi komend) ...
+
+            // Send acknowledgment back to client
+            String ackMessage = "{\"response\":\"acknowledged\"}";
+            webSocket.sendTXT(num, ackMessage);
+        }
+        break;
+    }
+}
+
+// ... w funkcji broadcastWebsocket() ...
+void broadcastWebsocket()
+{
+    docPins["manifoldMinTemp"] = String(manifoldMinTemp);
+    docPins["manifoldTemp"] = String(manifoldTemp);
+    docPins["boostThreshold"] = boostThreshold; // <-- Dodaj próg do wysyłanych danych
+
+    String data = manager.getRoomsAsJson(); // getRoomsAsJson teraz powinno zawierać meta z docPins
+    webSocket.broadcastTXT(data);
+}
+
+// ... reszta pliku main.cpp ...
+2. Plik romManager.h
+
+cpp
+// --- EEPROM Settings ---
+#define MAX_ROOMS_EEPROM 4 // Zmniejszono dla testów, dostosuj wg potrzeb
+const byte EEPROM_MAGIC_VALUE = 0xAB;
+
+// Define EEPROM Addresses
+const int ADDR_MAGIC = 0;                                                  // 1 byte (0)
+const int ADDR_USE_GAZ = ADDR_MAGIC + sizeof(byte);                        // 1 byte (1)
+const int ADDR_MIN_OPERATING_TEMP = ADDR_USE_GAZ + sizeof(bool);           // 4 bytes (2)
+// NOWY ADRES: Próg wspomagania
+const int ADDR_BOOST_THRESHOLD = ADDR_MIN_OPERATING_TEMP + sizeof(float); // 4 bytes (6)
+const int ADDR_ROOM_COUNT = ADDR_BOOST_THRESHOLD + sizeof(float);          // 1 byte (10)
+const int ADDR_ROOM_DATA_START = ADDR_ROOM_COUNT + sizeof(byte);           // (11)
+const int ROOM_DATA_SIZE = sizeof(int) + sizeof(int) + sizeof(bool) + sizeof(float); // 11 bytes (ID, pin, forced, fireplaceTemp)
+// Zaktualizowany rozmiar EEPROM
+const int EEPROM_SIZE = ADDR_ROOM_DATA_START + (MAX_ROOMS_EEPROM * ROOM_DATA_SIZE); // 11 + (4 * 11) = 55 bytes
+
+// Zaktualizuj sygnaturę i ciało funkcji saveSettings
+void saveSettings(RoomManager &mgr, bool currentUseGaz, float manifoldMinTemp, float currentBoostThreshold) { // <-- Dodaj currentBoostThreshold
+  Serial.println("Saving settings to EEPROM...");
+
+  EEPROM.begin(EEPROM_SIZE);
+
+  // Write all data first
+  EEPROM.put(ADDR_MAGIC, EEPROM_MAGIC_VALUE);
+  EEPROM.put(ADDR_USE_GAZ, currentUseGaz);
+  EEPROM.put(ADDR_MIN_OPERATING_TEMP, manifoldMinTemp);
+  EEPROM.put(ADDR_BOOST_THRESHOLD, currentBoostThreshold); // <-- Zapisz próg
+
+  const std::vector<RoomData> &currentRooms = mgr.getAllRooms();
+  byte roomCountToSave = min((byte)currentRooms.size(), (byte)MAX_ROOMS_EEPROM);
+  EEPROM.put(ADDR_ROOM_COUNT, roomCountToSave);
+
+  int currentAddr = ADDR_ROOM_DATA_START;
+  for (byte i = 0; i < roomCountToSave; ++i) {
+    const RoomData &room = currentRooms[i];
+    EEPROM.put(currentAddr, room.ID);
+    currentAddr += sizeof(int);
+    EEPROM.put(currentAddr, room.pinNumber);
+    currentAddr += sizeof(int);
+    EEPROM.put(currentAddr, room.forced);
+    currentAddr += sizeof(bool);
+    EEPROM.put(currentAddr, room.targetTemperatureFireplace);
+    currentAddr += sizeof(float);
+  }
+
+  // Single commit at the end
+  if (!EEPROM.commit()) {
+    Serial.println("EEPROM commit failed!");
+  } else {
+    Serial.printf("Settings saved successfully (useGaz=%s, minManifold=%.1f, boostThr=%.1f, rooms=%d)\n",
+                  currentUseGaz ? "true" : "false", manifoldMinTemp, currentBoostThreshold, roomCountToSave);
+  }
+  EEPROM.end();
+}
+
+// Zaktualizuj sygnaturę i ciało funkcji loadSettings
+bool loadSettings(RoomManager &mgr, bool &outUseGaz, float &outManifoldTemp, float &outBoostThreshold) { // <-- Dodaj outBoostThreshold
+  Serial.println("Loading settings from EEPROM...");
+
+  EEPROM.begin(EEPROM_SIZE);
+
+  byte magic;
+  EEPROM.get(ADDR_MAGIC, magic);
+  if (magic != EEPROM_MAGIC_VALUE) {
+    Serial.println("No valid settings found in EEPROM (magic byte mismatch)");
+    EEPROM.end();
+    return false;
+  }
+
+  EEPROM.get(ADDR_USE_GAZ, outUseGaz);
+  EEPROM.get(ADDR_MIN_OPERATING_TEMP, outManifoldTemp);
+  EEPROM.get(ADDR_BOOST_THRESHOLD, outBoostThreshold); // <-- Odczytaj próg
+
+  byte roomCount;
+  EEPROM.get(ADDR_ROOM_COUNT, roomCount);
+
+  // Sprawdzenie, czy liczba pokoi jest sensowna
+   if (roomCount > MAX_ROOMS_EEPROM) {
+       Serial.printf("Warning: Invalid room count (%d) found in EEPROM. Limiting to %d.\n", roomCount, MAX_ROOMS_EEPROM);
+       roomCount = MAX_ROOMS_EEPROM;
+   }
+
+
+  int currentAddr = ADDR_ROOM_DATA_START;
+  mgr.clearRooms(); // Wyczyść istniejące pokoje przed załadowaniem
+  Serial.printf("Loading %d rooms from EEPROM...\n", roomCount);
+  for (byte i = 0; i < roomCount; ++i) {
+    int id = -1, pin = -1; // Inicjalizuj domyślnymi/nieprawidłowymi wartościami
+    bool forced = false;
+    float temp = 0.0;
+
+    EEPROM.get(currentAddr, id);
+    currentAddr += sizeof(int);
+    EEPROM.get(currentAddr, pin);
+    currentAddr += sizeof(int);
+    EEPROM.get(currentAddr, forced);
+    currentAddr += sizeof(bool);
+    EEPROM.get(currentAddr, temp);
+    currentAddr += sizeof(float);
+
+    // Sprawdzenie poprawności danych (proste)
+    if (id != -1 && pin != -1) {
+        RoomData room;
+        room.ID = id;
+        room.pinNumber = pin;
+        room.forced = forced;
+        room.targetTemperatureFireplace = temp;
+        // Pozostałe dane (nazwa, temp. aktualna etc.) zostaną pobrane z API
+        mgr.updateOrAddRoom(room); // Użyj updateOrAddRoom, aby dodać lub zaktualizować
+         Serial.printf("  Loaded Room: ID=%d, Pin=%d, Forced=%s, FireplaceT=%.1f\n", id, pin, forced ? "true" : "false", temp);
+    } else {
+         Serial.printf("  Skipping invalid room data at index %d (ID=%d, Pin=%d)\n", i, id, pin);
+    }
+  }
+
+  EEPROM.end();
+   Serial.printf("Settings loaded: useGaz=%s, manifoldMinTemp=%.1f, boostThreshold=%.1f\n",
+                 outUseGaz ? "true" : "false", outManifoldTemp, outBoostThreshold);
+  return true;
+}
+
+// Dodaj metodę do czyszczenia pokoi w RoomManager (jeśli nie istnieje)
+// W pliku roomManager.h:
+/*
+class RoomManager {
+public:
+    // ... inne metody ...
+    void clearRooms() {
+        rooms.clear();
+        Serial.println("Cleared existing rooms before loading from EEPROM.");
+    }
+    // ... reszta klasy ...
+private:
+    std::vector<RoomData> rooms;
+    // ...
+};
+*/
+3. Plik manifoldLogicOld.h (lub gdziekolwiek jest funkcja manifoldLogicNew)
+
+cpp
+#include <vector> // Upewnij się, że jest dołączony
+
+// ... (ewentualne inne includy potrzebne w tym pliku) ...
+
+void manifoldLogicNew()
+{
+    Serial.println("[Manifold Logic] Running...");
+    const std::vector<RoomData>& rooms = manager.getAllRooms(); // Pobierz referencję do pokoi
+
+    if (rooms.empty()) {
+        Serial.println("[Manifold Logic] No rooms available. Skipping logic.");
+        // Opcjonalnie: wyłącz wszystkie wyjścia
+        for (int i = 0; i < 6; ++i) { // Zakładając 6 pinów dla pokoi
+             ExpOutput.digitalWrite(i, HIGH); // HIGH = OFF
+             // Aktualizuj docPins dla UI
+             String pinKey = "pin_" + String(i);
+             if (docPins["pins"].containsKey(pinKey)) {
+                 docPins["pins"][pinKey]["state"] = "OFF";
+             }
+        }
+        ExpOutput.digitalWrite(6, HIGH); // Wyłącz kocioł gazowy
+        ExpOutput.digitalWrite(7, HIGH); // Wyłącz pompę kominka
+        docPins["WoodStove"] = "off";
+        docPins["GazBoiler"] = "off";
+        return;
+    }
+
+    bool anyRoomNeedsHeating = false;
+    bool isWoodStoveActive = (ExpInput.digitalRead(P7) == LOW); // Sprawdź stan pompy kominka (LOW = ON?)
+    bool gazBoilerShouldBeOn = false;
+
+    // --- Logika wspomagania ---
+    bool boostSecondRoom = false;
+    RoomData* roomRef = nullptr; // Wskaźnik na pokój referencyjny (pin 0)
+    RoomData* roomBoosted = nullptr; // Wskaźnik na pokój wspomagany (pin 1)
+
+    for (const auto& room : rooms) { // Użyj const auto& dla efektywności
+        if (room.pinNumber == 0) {
+            roomRef = const_cast<RoomData*>(&room); // Usuń const, jeśli potrzebujesz modyfikować (choć tu nie trzeba)
+        }
+        if (room.pinNumber == 1) {
+            roomBoosted = const_cast<RoomData*>(&room);
+        }
+    }
+
+    if (roomRef != nullptr && roomRef->reachable) { // Sprawdź czy pokój referencyjny istnieje i jest osiągalny
+        float targetTempRef = roomRef->targetTemperatureNetatmo; // Użyj Netatmo jako zadanej
+        float currentTempRef = roomRef->currentTemperature;
+        float deltaT = targetTempRef - currentTempRef;
+
+        if (deltaT > boostThreshold) {
+            boostSecondRoom = true;
+            Serial.printf("[Manifold Logic] Room 0 (Ref) needs boost: DeltaT (%.1f) > Threshold (%.1f). Boosting Room 1.\n", deltaT, boostThreshold);
+        }
+    } else {
+         if (roomRef == nullptr) Serial.println("[Manifold Logic] Reference room (pin 0) not found.");
+         else Serial.println("[Manifold Logic] Reference room (pin 0) is not reachable.");
+    }
+    // --- Koniec logiki wspomagania ---
+
+
+    // --- Główna pętla logiki dla każdego pokoju ---
+    for (const auto& room : rooms) { // Ponownie iteruj lub użyj wskaźników/indeksów
+        if (room.pinNumber < 0 || room.pinNumber > 5) { // Ignoruj pokoje bez przypisanego pinu (0-5)
+             Serial.printf("[Manifold Logic] Skipping room '%s' (ID: %d) - invalid pinNumber: %d\n", room.name.c_str(), room.ID, room.pinNumber);
+             continue;
+        }
+
+        bool needsHeating = false;
+        float effectiveTargetTemp = 0; // Temperatura, do której dążymy
+
+        // Określ efektywną temperaturę zadaną
+        if (room.forced) {
+            // W trybie wymuszonym, zawsze grzejemy, chyba że temperatura przekroczyła jakiś limit bezpieczeństwa (np. 30°C)
+            // Użyjemy targetTemperatureNetatmo jako odniesienia, ale grzejemy niezależnie od niej (chyba że za gorąco)
+            effectiveTargetTemp = room.targetTemperatureNetatmo; // Lub jakaś wysoka wartość
+             if (room.currentTemperature < 30.0) { // Limit bezpieczeństwa
+                 needsHeating = true;
+                 Serial.printf("[Manifold Logic] Room %d ('%s', Pin %d): Forced ON (Current: %.1f < 30.0)\n", room.ID, room.name.c_str(), room.pinNumber, room.currentTemperature);
+             } else {
+                 needsHeating = false;
+                 Serial.printf("[Manifold Logic] Room %d ('%s', Pin %d): Forced OFF (Current: %.1f >= 30.0 Safety Limit)\n", room.ID, room.name.c_str(), room.pinNumber, room.currentTemperature);
+             }
+        } else if (isWoodStoveActive && !useGaz_) {
+            // Kominek aktywny, używamy temperatury kominkowej
+            effectiveTargetTemp = room.targetTemperatureFireplace;
+            if (room.currentTemperature < effectiveTargetTemp) {
+                needsHeating = true;
+            }
+             Serial.printf("[Manifold Logic] Room %d ('%s', Pin %d): WoodStove Mode. Target: %.1f, Current: %.1f -> NeedsHeating: %s\n", room.ID, room.name.c_str(), room.pinNumber, effectiveTargetTemp, room.currentTemperature, needsHeating ? "YES" : "NO");
+        } else {
+            // Tryb normalny (gazowy lub kominek nieaktywny)
+            effectiveTargetTemp = room.targetTemperatureNetatmo;
+            if (room.currentTemperature < effectiveTargetTemp) {
+                needsHeating = true;
+            }
+             Serial.printf("[Manifold Logic] Room %d ('%s', Pin %d): Normal/Gaz Mode. Target: %.1f, Current: %.1f -> NeedsHeating: %s\n", room.ID, room.name.c_str(), room.pinNumber, effectiveTargetTemp, room.currentTemperature, needsHeating ? "YES" : "NO");
+        }
+
+        // Zastosuj logikę wspomagania dla pokoju 1
+        if (room.pinNumber == 1 && boostSecondRoom) {
+            if (!needsHeating) { // Jeśli normalnie nie potrzebował grzania, ale jest wspomagany
+                 Serial.printf("[Manifold Logic] Room %d ('%s', Pin %d): Overriding to ON due to boost.\n", room.ID, room.name.c_str(), room.pinNumber);
+            }
+            needsHeating = true; // Wymuś grzanie dla pokoju 1, jeśli boost jest aktywny
+        }
+
+
+        // Sprawdzenie osiągalności - jeśli pokój nieosiągalny, nie grzejemy
+        if (!room.reachable) {
+             if (needsHeating) { // Jeśli potrzebował grzania, ale jest nieosiągalny
+                 Serial.printf("[Manifold Logic] Room %d ('%s', Pin %d): Needs heating BUT is unreachable. Turning OFF.\n", room.ID, room.name.c_str(), room.pinNumber);
+             }
+             needsHeating = false;
+        }
+
+        // Ustaw stan przekaźnika dla pokoju
+        ExpOutput.digitalWrite(room.pinNumber, needsHeating ? LOW : HIGH); // LOW = ON, HIGH = OFF
+        manager.updateValveStatus(room.ID, needsHeating); // Aktualizuj stan zaworu w managerze
+
+        // Aktualizuj stan w docPins dla interfejsu webowego
+        String pinKey = "pin_" + String(room.pinNumber);
+         if (docPins["pins"].containsKey(pinKey)) { // Sprawdź czy klucz istnieje
+             docPins["pins"][pinKey]["state"] = needsHeating ? "ON" : "OFF";
+             docPins["pins"][pinKey]["forced"] = room.forced ? "true" : "false"; // Aktualizuj też stan forced
+             // Można dodać flagę "boosted" dla UI
+             if (room.pinNumber == 1) {
+                  docPins["pins"][pinKey]["boosted"] = boostSecondRoom ? "true" : "false";
+             } else {
+                  docPins["pins"][pinKey]["boosted"] = "false";
+             }
+         } else {
+             Serial.printf("[Manifold Logic] Warning: Key '%s' not found in docPins['pins']\n", pinKey.c_str());
+             // Można utworzyć klucz, jeśli go nie ma
+             // docPins["pins"][pinKey]["state"] = needsHeating ? "ON" : "OFF";
+             // docPins["pins"][pinKey]["forced"] = room.forced ? "true" : "false";
+         }
+
+
+        if (needsHeating) {
+            anyRoomNeedsHeating = true; // Zaznacz, że przynajmniej jeden pokój potrzebuje grzania
+        }
+    }
+
+    // --- Logika sterowania źródłem ciepła ---
+    bool woodStovePumpOn = (ExpInput.digitalRead(P7) == LOW); // Odczytaj ponownie lub użyj zmiennej
+    docPins["WoodStove"] = woodStovePumpOn ? "on" : "off";
+
+    if (anyRoomNeedsHeating) {
+        if (useGaz_) {
+            // Tryb gazowy: włącz kocioł, jeśli jakikolwiek pokój grzeje
+            gazBoilerShouldBeOn = true;
+            Serial.println("[Manifold Logic] Mode: Gaz. Rooms need heat. Turning Gaz Boiler ON.");
+        } else {
+            // Tryb kominkowy: Kocioł gazowy wyłączony
+            gazBoilerShouldBeOn = false;
+             if (woodStovePumpOn) {
+                 Serial.println("[Manifold Logic] Mode: WoodStove (Active). Rooms need heat. Wood stove pump is ON.");
+             } else {
+                  Serial.println("[Manifold Logic] Mode: WoodStove (Inactive). Rooms need heat BUT wood stove pump is OFF. No heating source!");
+                  // Opcjonalnie: Można by tu wymusić włączenie gazu jako backup? Na razie nie.
+             }
+        }
+    } else {
+        // Żaden pokój nie potrzebuje grzania
+        gazBoilerShouldBeOn = false;
+        Serial.println("[Manifold Logic] No rooms need heating. Turning Gaz Boiler OFF.");
+    }
+
+    // Dodatkowa logika dla minimalnej temperatury kolektora (jeśli używasz)
+    // Jeśli kocioł gazowy ma być włączony, ale temp. kolektora jest za niska,
+    // może trzeba poczekać lub wymusić grzanie kolektora?
+    // Na razie prosto: włączamy/wyłączamy kocioł wg potrzeb pokoi.
+    // if (gazBoilerShouldBeOn && manifoldTemp < manifoldMinTemp) {
+    //     Serial.printf("[Manifold Logic] Gaz boiler wants ON, but manifold temp (%.1f) < min (%.1f). Keeping boiler ON to heat up.\n", manifoldTemp, manifoldMinTemp);
+    //     // Można dodać logikę cyrkulacji tylko dla podgrzania kolektora?
+    // }
+
+
+    ExpOutput.digitalWrite(6, gazBoilerShouldBeOn ? LOW : HIGH); // Sterowanie kotłem gazowym (Pin 6)
+    docPins["GazBoiler"] = gazBoilerShouldBeOn ? "on" : "off";
+
+    // Pin 7 (pompa kominka) jest tylko wejściem - nie sterujemy nim tutaj.
+
+    Serial.println("[Manifold Logic] Finished.");
+}
+
+4. Plik webPage.h (Konceptualnie)
+
+Musisz dodać w interfejsie HTML/JavaScript:
+
+Pole <input type="number" id="boostThreshold" ...> do wprowadzania wartości progu.
+Przycisk lub zdarzenie onchange, które wyśle wiadomość WebSocket do ESP z komendą setBoostThreshold i nową wartością.
+javascript
+// Przykład w JavaScript
+function sendBoostThreshold() {
+    const threshold = document.getElementById('boostThreshold').value;
+    const message = {
+        command: "setBoostThreshold",
+        value: parseFloat(threshold) // Upewnij się, że wysyłasz liczbę
+    };
+    websocket.send(JSON.stringify(message));
+}
+
+// W obsłudze odbierania wiadomości WebSocket, zaktualizuj pole input
+// websocket.onmessage = function(event) {
+//     const data = JSON.parse(event.data);
+//     if (data.meta && data.meta.boostThreshold !== undefined) {
+//         document.getElementById('boostThreshold').value = data.meta.boostThreshold;
+//     }
+//     // ... reszta obsługi ...
+// };
+Wyświetlanie aktualnej wartości progu (np. obok pola input), aktualizowane przy odbiorze danych z ESP.
+(Opcjonalnie) Wskaźnik wizualny przy drugim pokoju, pokazujący, czy jest aktualnie "wspomagany" (na podstawie flagi boosted w docPins).
+Wyjaśnienia i uwagi:
+
+EEPROM: Zaktualizowałem adresy i rozmiar EEPROM w romManager.h, aby zmieścić nowy parametr boostThreshold. Upewnij się, że EEPROM_SIZE jest wystarczający dla MAX_ROOMS_EEPROM i wszystkich parametrów. Zmniejszyłem MAX_ROOMS_EEPROM do 4 dla przykładu, dostosuj to do swoich potrzeb. Poprawiłem też logikę ładowania pokoi, aby czyściła listę przed załadowaniem i dodawała pokoje za pomocą updateOrAddRoom.
+Identyfikacja Pokoi: Kod w manifoldLogicNew jawnie szuka pokoi z pinNumber == 0 i pinNumber == 1. Jeśli używasz innych pinów, zmień te wartości.
+Logika manifoldLogicNew:
+Najpierw sprawdzana jest potrzeba wspomagania (boostSecondRoom).
+Następnie w pętli dla każdego pokoju ustalana jest jego "normalna" potrzeba grzania (needsHeating) w zależności od trybu (forced, kominek, gaz).
+Specjalnie dla pokoju z pinNumber == 1, jeśli boostSecondRoom jest true, needsHeating jest ustawiane na true, nadpisując ewentualny wcześniejszy stan false.
+Dodano sprawdzanie osiągalności (reachable) - jeśli pokój nie jest osiągalny, grzanie jest wyłączane.
+Aktualizowany jest stan zaworu w RoomManager (updateValveStatus) oraz stan w docPins dla UI.
+Na końcu podejmowana jest decyzja o włączeniu kotła gazowego (GazBoiler, pin 6).
+Bezpieczeństwo: W trybie forced dodałem prosty limit bezpieczeństwa (30°C), aby uniknąć przegrzania. Możesz go dostosować.
+Interfejs: Pamiętaj o dodaniu odpowiednich elementów w HTML i logiki w JavaScript do zarządzania nowym parametrem.
+Testowanie: Dokładnie przetestuj działanie, zwłaszcza zapis/odczyt z EEPROM i logikę wspomagania w różnych scenariuszach (różne temperatury, tryby pracy, osiągalność pokoi). Sprawdzaj komunikaty na Serial Monitor.
+Po wprowadzeniu tych zmian, drugi pokój (pin 1) powinien być automatycznie dogrzewany, gdy różnica temperatur w pierwszym pokoju (pin 0) przekroczy ustawiony próg boostThreshold.
+
+Rate this answer: 
+Context Sources (6)

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kod sterowania ogrzewaniem</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            margin-top: 30px;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border-left: 4px solid #3498db;
+        }
+        code {
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            font-size: 14px;
+        }
+        .note {
+            background-color: #fffde7;
+            padding: 10px;
+            border-left: 4px solid #ffd600;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Implementacja sterowania ogrzewaniem z funkcją wspomagania</h1>
+    
+    <h2>Główne założenia systemu</h2>
+    <p>System ma dogrzewać drugi pokój, gdy różnica temperatur w pokoju głównym przekroczy konfigurowalny próg.</p>
+
+    <div class="note">
+        <p><strong>Identyfikacja pokoi:</strong> Pokój główny (referencyjny) to pinNumber = 0, pokój wspomagany to pinNumber = 1.</p>
+    </div>
+
+    <h2>1. Plik main.cpp</h2>
+    <pre><code>// ... inne includy i definicje ...
+
+#include &lt;functional&gt;
+#include &lt;webPage.h&gt;
+#include &lt;roomManager.h&gt;
+
+// ... definicje thingName, wifiInitialApPassword, etc. ...
+
+// NOWY PARAMETR: Próg różnicy temperatur do włączenia wspomagania
+float boostThreshold = 2.5; // Domyślna wartość
+
+// ... reszta zmiennych globalnych (forced, woodStove, state, pin, useGaz_, etc.) ...
+
+// Zaktualizuj wywołanie loadSettings i saveSettings w setup() i onWsEvent, aby uwzględnić nowy parametr
+
+// ... w funkcji setup() ...
+void setup()
+{
+    // ... (początek setup) ...
+
+    // -- Load settings or initialize EEPROM --
+    // Zaktualizuj wywołanie loadSettings, dodając boostThreshold
+    if (!loadSettings(manager, useGaz_, manifoldMinTemp, boostThreshold)) // &lt;-- Dodaj boostThreshold
+    {
+        // EEPROM not initialized or data corrupted, save defaults
+        Serial.println("Initializing EEPROM with default settings...");
+        useGaz_ = false; // Default value
+        manifoldMinTemp = 18.0; // Default value
+        boostThreshold = 2.5; // Default value &lt;-- Ustaw domyślny próg
+        // Manager defaults are set in its constructor.
+        saveSettings(manager, useGaz_, manifoldMinTemp, boostThreshold); // &lt;-- Dodaj boostThreshold
+    }
+     else {
+         Serial.printf("Loaded settings: useGaz=%s, manifoldMinTemp=%.1f, boostThreshold=%.1f\n",
+                       useGaz_ ? "true" : "false", manifoldMinTemp, boostThreshold);
+     }
+    // Update docPins based on potentially loaded useGaz_ value AFTER loading attempt
+    docPins["usegaz"] = useGaz_ ? "true" : "false";
+    docPins["boostThreshold"] = boostThreshold; // &lt;-- Dodaj próg do danych wysyłanych do UI
+
+    // ... (reszta setup) ...
+
+     // Aktualizacja timera dla broadcastWebsocket, aby wysyłał też próg
+     // timers.attach(1, 12000, broadcastWebsocket); // Już istnieje, upewnij się, że broadcastWebsocket wysyła próg
+     timers.attach(3, 5000, readAHT); // Zmieniono interwał na 5 sekund dla testów AHT
+}</code></pre>
+
+    <h2>2. Plik romManager.h</h2>
+    <pre><code>// --- EEPROM Settings ---
+#define MAX_ROOMS_EEPROM 4 // Zmniejszono dla testów, dostosuj wg potrzeb
+const byte EEPROM_MAGIC_VALUE = 0xAB;
+
+// Define EEPROM Addresses
+const int ADDR_MAGIC = 0;                                                  // 1 byte (0)
+const int ADDR_USE_GAZ = ADDR_MAGIC + sizeof(byte);                        // 1 byte (1)
+const int ADDR_MIN_OPERATING_TEMP = ADDR_USE_GAZ + sizeof(bool);           // 4 bytes (2)
+// NOWY ADRES: Próg wspomagania
+const int ADDR_BOOST_THRESHOLD = ADDR_MIN_OPERATING_TEMP + sizeof(float); // 4 bytes (6)
+const int ADDR_ROOM_COUNT = ADDR_BOOST_THRESHOLD + sizeof(float);          // 1 byte (10)
+const int ADDR_ROOM_DATA_START = ADDR_ROOM_COUNT + sizeof(byte);           // (11)
+const int ROOM_DATA_SIZE = sizeof(int) + sizeof(int) + sizeof(bool) + sizeof(float); // 11 bytes (ID, pin, forced, fireplaceTemp)
+// Zaktualizowany rozmiar EEPROM
+const int EEPROM_SIZE = ADDR_ROOM_DATA_START + (MAX_ROOMS_EEPROM * ROOM_DATA_SIZE); // 11 + (4 * 11) = 55 bytes
+
+// Zaktualizuj sygnaturę i ciało funkcji saveSettings
+void saveSettings(RoomManager &mgr, bool currentUseGaz, float manifoldMinTemp, float currentBoostThreshold) { // &lt;-- Dodaj currentBoostThreshold
+  Serial.println("Saving settings to EEPROM...");
+
+  EEPROM.begin(EEPROM_SIZE);
+
+  // Write all data first
+  EEPROM.put(ADDR_MAGIC, EEPROM_MAGIC_VALUE);
+  EEPROM.put(ADDR_USE_GAZ, currentUseGaz);
+  EEPROM.put(ADDR_MIN_OPERATING_TEMP, manifoldMinTemp);
+  EEPROM.put(ADDR_BOOST_THRESHOLD, currentBoostThreshold); // &lt;-- Zapisz próg
+
+  const std::vector&lt;RoomData&gt; &currentRooms = mgr.getAllRooms();
+  byte roomCountToSave = min((byte)currentRooms.size(), (byte)MAX_ROOMS_EEPROM);
+  EEPROM.put(ADDR_ROOM_COUNT, roomCountToSave);
+
+  int currentAddr = ADDR_ROOM_DATA_START;
+  for (byte i = 0; i &lt; roomCountToSave; ++i) {
+    const RoomData &room = currentRooms[i];
+    EEPROM.put(currentAddr, room.ID);
+    currentAddr += sizeof(int);
+    EEPROM.put(currentAddr, room.pinNumber);
+    currentAddr += sizeof(int);
+    EEPROM.put(currentAddr, room.forced);
+    currentAddr += sizeof(bool);
+    EEPROM.put(currentAddr, room.targetTemperatureFireplace);
+    currentAddr += sizeof(float);
+  }
+
+  // Single commit at the end
+  if (!EEPROM.commit()) {
+    Serial.println("EEPROM commit failed!");
+  } else {
+    Serial.printf("Settings saved successfully (useGaz=%s, minManifold=%.1f, boostThr=%.1f, rooms=%d)\n",
+                  currentUseGaz ? "true" : "false", manifoldMinTemp, currentBoostThreshold, roomCountToSave);
+  }
+  EEPROM.end();
+}</code></pre>
+
+    <h2>3. Modyfikacja logiki sterowania</h2>
+    <pre><code>// --- Logika wspomagania ---
+bool boostSecondRoom = false;
+RoomData* roomRef = nullptr; // Wskaźnik na pokój referencyjny (pin 0)
+RoomData* roomBoosted = nullptr; // Wskaźnik na pokój wspomagany (pin 1)
+
+for (const auto& room : rooms) { // Użyj const auto& dla efektywności
+    if (room.pinNumber == 0) {
+        roomRef = const_cast&lt;RoomData*&gt;(&room); // Usuń const, jeśli potrzebujesz modyfikować
+    }
+    if (room.pinNumber == 1) {
+        roomBoosted = const_cast&lt;RoomData*&gt;(&room);
+    }
+}
+
+if (roomRef != nullptr && roomRef->reachable) { // Sprawdź czy pokój referencyjny istnieje i jest osiągalny
+    float targetTempRef = roomRef->targetTemperatureNetatmo; // Użyj Netatmo jako zadanej
+    float currentTempRef = roomRef->currentTemperature;
+    float deltaT = targetTempRef - currentTempRef;
+
+    if (deltaT > boostThreshold) {
+        boostSecondRoom = true;
+        Serial.printf("[Manifold Logic] Room 0 (Ref) needs boost: DeltaT (%.1f) > Threshold (%.1f). Boosting Room 1.\n", deltaT, boostThreshold);
+    }
+} else {
+     if (roomRef == nullptr) Serial.println("[Manifold Logic] Reference room (pin 0) not found.");
+     else Serial.println("[Manifold Logic] Reference room (pin 0) is not reachable.");
+}
+// --- Koniec logiki wspomagania ---</code></pre>
+
+    <div class="note">
+        <p><strong>Uwaga:</strong> Kod zachowuje oryginalne formatowanie i komentarze z wklejonego tekstu. Znaki specjalne HTML zostały zamienione na encje (np. &lt; na &amp;lt;).</p>
+    </div>
+</body>
+</html>
