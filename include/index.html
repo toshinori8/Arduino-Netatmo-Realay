@@ -315,36 +315,64 @@
 
         <!-- Zakładki -->
         <div class="config-tabs">
-          <button class="tab-button active" data-tab="rooms">POKOJE</button>
-          <button class="tab-button" data-tab="settings">USTAWIENIA</button>
+          <button class="tab-button " data-tab="rooms">POKOJE</button>
+          <button class="tab-button active" data-tab="settings">USTAWIENIA</button>
         </div>
 
         <hr/>
         <br/>
 
-        <!-- Zawartość zakładki POKOJE -->
-        <div class="tab-content" id="rooms-tab">
-          <div id="roomList"></div>
-        </div>
-
+      
         <!-- Zawartość zakładki USTAWIENIA -->
-        <div class="tab-content" id="settings-tab" style="display: none;">
+        <div class="tab-content" id="settings-tab" >
           <div class="settings-container">
             
             <div class="setting-item">
-              <label>Minimalna temperatura włączenia:</label>
+
+              <table  cellspacing="0" cellpadding="0">
+
+                
+                <tr>
+                  <td> <label>Minimalna temperatura na rozdzielaczu<br> potrzebna do włączenia grzania:</label></td>
+                  <td> <input type="number" class="manifoldMinTemp" ></td>
+                </tr></tr>
+                <tr>
+                  <td><label>Róznica temperatur<br>do włączenia drugiego obiegu:</label></td>
+                  <td><input type="number" class="boostThreshold" ></td>
+                </tr>
+
+                <tr>
+                  <td><label>Tryb pracy ogrzewnia: priorytet</label></td>
+                  <td>
+                    <select class="workMode">
+                      <option value="wood_gas">Kominek + Gaz</option>
+                      <option value="wood_only">Kominek</option>
+                      <option value="gas_only">Gaz</option>
+                      
+                    </select>
+                  </td>
+                </tr>
+
+
+
+              </table>
+
+
+             
+            
               
-              <input type="number" class="manifoldMinTemp" >
-              </br>
-              <label>Tryb pracy:</label>
-              <select id="workMode">
-                <option value="auto">Automatyczny</option>
-                <option value="manual">Manualny</option>
-              </select></br>
+             
             
             </div>
           </div>
         </div>
+
+        <!-- Zawartość zakładki POKOJE -->
+        <div class="tab-content" id="rooms-tab" style="display: none;">
+          <div id="roomList"></div>
+        </div>
+
+        
 
         <br/>
         <hr/>

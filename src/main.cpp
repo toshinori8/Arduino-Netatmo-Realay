@@ -60,15 +60,34 @@ float manifoldMaxTemp = 60.0;
 void readAHT()
 {
 
-  if (sensor.measure(&manifoldTemp, &manifoldHum))
-  {
-  }
-  else
-  {
-    Serial.println("Measurement failed");
-  }
+ float temp_reading, hum_reading;
+    // Serial.printf("Attempting AHT read. Last known Temp: %.1f, Errors: %d\n", manifoldTemp, aht_read_errors); // Log
 
-  /*  aht.getEvent(&humidity, &temp); */
+    if (sensor.measure(&temp_reading, &hum_reading)) {
+        manifoldTemp = temp_reading;
+        manifoldHum = hum_reading;
+        // Serial.printf("AHT Read OK: Temp=%.1f, Hum=%.1f\n", manifoldTemp, manifoldHum);
+        aht_read_errors = 0; // Resetuj licznik błędów po sukcesie
+    } else {
+        Serial.println("AHT Measurement failed.");
+        aht_read_errors++;
+        if (aht_read_errors >= MAX_AHT_ERRORS_BEFORE_RESET) {
+            Serial.printf("Reached %d AHT read errors. Attempting sensor reset and re-init...\n", aht_read_errors);
+            if (sensor.softReset()) {
+                delay(100); // Daj czas na ustabilizowanie
+                if (sensor.begin()) {
+                     Serial.println("AHT Sensor re-initialized successfully after reset.");
+                     aht_read_errors = 0; // Resetuj licznik po udanej reinicjalizacji
+                } else {
+                     Serial.println("AHT Sensor re-initialization FAILED after reset.");
+                     // Błąd nadal występuje, licznik nie jest resetowany
+                }
+            } else {
+                 Serial.println("AHT Sensor soft reset command FAILED.");
+                 // Błąd nadal występuje
+            }
+        }
+   }
 }
 
 WebSocketsServer webSocket = WebSocketsServer(81);
@@ -493,7 +512,7 @@ void setup()
   timers.attach(0, 65000, fetchNetatmo);
   timers.attach(1, 12000, broadcastWebsocket);
   timers.attach(2, 20000, manifoldLogicNew);
-  timers.attach(4, 150000, readAHT);
+  timers.attach(3, 150000, readAHT);
 }
 
 void loop()

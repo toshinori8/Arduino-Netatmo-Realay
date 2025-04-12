@@ -1,11 +1,17 @@
 #include <Wire.h>
 
+int aht_read_errors = 0;
+const int MAX_AHT_ERRORS_BEFORE_RESET = 5;
+
+
 class AHT10 {
 private:
     uint8_t address;
     bool initialized = false;
     
     static const uint8_t AHT10_CALIBRATE_CMD = 0xE1;
+    static const uint8_t AHT10_SOFT_RESET_CMD = 0xBA;
+
     static const uint8_t AHT10_MEASURE_CMD[3];
     static const uint8_t AHT10_DEFAULT_DELAY = 75;    // ms
     static const uint8_t AHT10_HUMIDITY_DELAY = 75;  // ms
@@ -19,6 +25,16 @@ public:
     
     bool begin();
     bool measure(float* temperature, float* humidity);
+    bool softReset() {
+        Serial.println("Sending AHT10 Soft Reset command (0xBA)...");
+        uint8_t cmd = AHT10_SOFT_RESET_CMD;
+        if (!writeCommand(&cmd, 1)) {
+            Serial.println("AHT10 Soft Reset command failed");
+            return false;
+        }
+        delay(20); // Krótki delay po resecie (wg datasheet AHT20, może być pomocny)
+        return true;
+    }
 };
 
 const uint8_t AHT10::AHT10_MEASURE_CMD[3] = {0xAC, 0x33, 0x00};
@@ -26,6 +42,11 @@ const uint8_t AHT10::AHT10_MEASURE_CMD[3] = {0xAC, 0x33, 0x00};
 bool AHT10::begin() {
     Wire.begin();
     
+     if (!softReset()) {
+         // Możesz zdecydować, czy kontynuować mimo błędu resetu
+         Serial.println("Soft Reset failed, attempting to continue initialization...");
+    }
+
     // Send calibration command
     uint8_t cmd = AHT10_CALIBRATE_CMD;
     if (!writeCommand(&cmd, 1)) {
